@@ -385,92 +385,133 @@
     </main>
 
     <!-- ========================================================================= -->
-    <!-- VIEW 2: GEN-Z CHAT INTERFACE WITH GEMINI API                               -->
+    <!-- VIEW 2: GEN-Z CHAT INTERFACE WITH CHAT HISTORY SIDEBAR                      -->
     <!-- ========================================================================= -->
     <main id="view-chat" class="hidden flex-1 flex flex-col h-[calc(100vh-140px)] glass-card rounded-3xl shadow-card border border-white/90 overflow-hidden relative">
 
       <!-- CHAT HEADER BAR -->
-      <div class="px-5 py-4 border-b border-pastel-pink/30 bg-white/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
+      <div class="px-3 sm:px-6 py-3.5 border-b border-pastel-pink/30 bg-white/70 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0 z-20">
 
-        <!-- Shanaya Active Status -->
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-pastel-pink to-pastel-lavender flex items-center justify-center text-xl shadow-xs">
-            ✨
-          </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <h3 class="font-serif font-bold text-gray-900 text-lg">Shanaya</h3>
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <!-- Left: Sidebar Toggle & Shanaya Profile -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <button onclick="toggleSidebar()" id="sidebar-toggle-btn" class="p-2 sm:px-3 sm:py-2 rounded-2xl bg-white/80 hover:bg-pastel-softPink text-gray-700 hover:text-pastel-accent border border-pastel-pink/40 shadow-xs transition-all flex items-center gap-1.5 text-xs font-bold active:scale-95" title="Toggle Chat History">
+            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+            <span class="hidden sm:inline">Chats</span>
+          </button>
+
+          <div class="flex items-center gap-2 sm:gap-2.5">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-pastel-pink to-pastel-lavender flex items-center justify-center text-lg sm:text-xl shadow-xs shrink-0">
+              ✨
             </div>
-            <p id="chat-subtitle" class="text-xs text-gray-500">Drinking iced espresso • Listening to nu-disco</p>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="font-serif font-bold text-gray-900 text-base sm:text-lg leading-tight">Shanaya</h3>
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              </div>
+              <p id="chat-subtitle" class="text-[11px] sm:text-xs text-gray-500 truncate max-w-[120px] sm:max-w-none">Drinking iced espresso • Nu-disco</p>
+            </div>
           </div>
         </div>
 
-        <!-- VIBE / SASS METER SELECTOR PILL -->
+        <!-- Center/Right: VIBE / SASS METER SELECTOR PILL -->
         <div class="flex items-center gap-1 bg-pastel-softPink/80 p-1 rounded-full border border-pastel-pink/40 shadow-inner">
-          <button onclick="setSassLevel('sweet')" id="sass-btn-sweet" class="px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-pastel-accent shadow-xs">
+          <button onclick="setSassLevel('sweet')" id="sass-btn-sweet" class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-pastel-accent shadow-xs">
             Sweet 🎀
           </button>
-          <button onclick="setSassLevel('balanced')" id="sass-btn-balanced" class="px-3 py-1 rounded-full text-xs font-bold transition-all text-gray-600 hover:text-gray-900">
+          <button onclick="setSassLevel('balanced')" id="sass-btn-balanced" class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all text-gray-600 hover:text-gray-900">
             Balanced ✨
           </button>
-          <button onclick="setSassLevel('full')" id="sass-btn-full" class="px-3 py-1 rounded-full text-xs font-bold transition-all text-gray-600 hover:text-gray-900">
-            Full Sass 💅
+          <button onclick="setSassLevel('full')" id="sass-btn-full" class="px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all text-gray-600 hover:text-gray-900">
+            Sass 💅
           </button>
         </div>
 
         <!-- Action Controls -->
         <div class="flex items-center gap-2">
-          <button onclick="clearChatHistory()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors border border-transparent hover:border-rose-200" title="Clear Conversation">
-            Clear Chat 🧹
+          <button onclick="clearChatHistory()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:bg-rose-50 hover:text-rose-600 transition-colors border border-transparent hover:border-rose-200" title="Clear current conversation">
+            <span class="hidden sm:inline">Clear Chat</span> 🧹
           </button>
         </div>
 
       </div>
 
-      <!-- MESSAGES SCROLL CONTAINER -->
-      <div id="chat-messages" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+      <!-- CHAT WORKSPACE (SIDEBAR + MAIN MESSAGES) -->
+      <div class="flex-1 flex overflow-hidden relative">
 
-        <!-- Initial Welcome Message from Shanaya -->
-        <div class="flex items-start gap-3 max-w-2xl">
-          <div class="w-9 h-9 rounded-xl bg-pastel-pink flex items-center justify-center text-lg shrink-0 shadow-xs">
-            💅
-          </div>
-          <div class="bg-white/95 rounded-2xl rounded-tl-none p-4 shadow-sm border border-pastel-pink/30 text-sm text-gray-800 space-y-2">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-1 mb-1">
-              <span class="font-bold text-xs text-pastel-accent">Shanaya</span>
-              <span class="text-[10px] text-gray-400">Just now</span>
+        <!-- MOBILE SIDEBAR BACKDROP -->
+        <div id="sidebar-backdrop" onclick="toggleSidebar(false)" class="hidden fixed sm:hidden inset-0 bg-black/20 backdrop-blur-xs z-30 transition-opacity"></div>
+
+        <!-- COLLAPSIBLE PASTEL SIDEBAR -->
+        <aside id="chat-sidebar" class="absolute sm:relative inset-y-0 left-0 z-40 w-72 sm:w-64 md:w-72 bg-white/95 sm:bg-white/75 backdrop-blur-md border-r border-pastel-pink/40 flex flex-col transition-all duration-300 ease-in-out shrink-0 -translate-x-full sm:translate-x-0 shadow-xl sm:shadow-none overflow-hidden">
+          
+          <!-- SIDEBAR HEADER & NEW CHAT BUTTON -->
+          <div class="p-3.5 border-b border-pastel-pink/30 space-y-2.5 shrink-0 bg-white/40">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
+                <span>💬</span>
+                <span>Chat History</span>
+              </span>
+              <button onclick="toggleSidebar(false)" class="sm:hidden p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-black/5" title="Close sidebar">
+                ✕
+              </button>
             </div>
-            <p>Hii bestie! 💖 I'm ready to yap! Ask me anything, pick my brain, or get some main-character advice. Don't forget to play the nu-disco track up top for peak vibes! ✨</p>
+
+            <button onclick="createNewSession()" class="w-full py-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-pastel-pink to-pastel-softPink hover:from-pastel-pink/90 hover:to-pastel-softPink/90 text-gray-900 font-extrabold text-xs shadow-xs border border-pastel-pink/50 hover:shadow-pastel active:scale-95 transition-all flex items-center justify-center gap-2">
+              <span class="text-base leading-none font-black">+</span>
+              <span>New Chat</span>
+              <span class="text-xs">✨</span>
+            </button>
           </div>
+
+          <!-- SESSIONS LIST SCROLLER -->
+          <div id="sidebar-sessions-list" class="flex-1 overflow-y-auto p-2.5 space-y-1.5">
+            <!-- Dynamically populated by renderSidebarSessions() -->
+          </div>
+
+          <!-- SIDEBAR FOOTER -->
+          <div class="p-3 border-t border-pastel-pink/30 text-[10px] text-gray-400 flex items-center justify-between shrink-0 bg-white/30">
+            <span>Saved locally 🌸</span>
+            <span id="session-count-badge" class="font-bold text-gray-500">0 chats</span>
+          </div>
+
+        </aside>
+
+        <!-- MAIN CHAT VIEW COLUMN -->
+        <div class="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
+
+          <!-- MESSAGES SCROLL CONTAINER -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+            <!-- Dynamically populated by renderSessionMessages() -->
+          </div>
+
+          <!-- TYPING INDICATOR (HIDDEN BY DEFAULT) -->
+          <div id="typing-indicator" class="hidden px-6 py-2 flex items-center gap-2 text-xs font-semibold text-pastel-accent animate-pulse shrink-0">
+            <div class="w-7 h-7 rounded-lg bg-pastel-softPink flex items-center justify-center text-sm">✨</div>
+            <span>Shanaya is thinking of an iconic reply...</span>
+            <div class="flex items-center gap-1 ml-1">
+              <div class="w-1.5 h-1.5 rounded-full bg-pastel-pink animate-bounce" style="animation-delay: 0s;"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-pastel-lavender animate-bounce" style="animation-delay: 0.15s;"></div>
+              <div class="w-1.5 h-1.5 rounded-full bg-pastel-accent animate-bounce" style="animation-delay: 0.3s;"></div>
+            </div>
+          </div>
+
+          <!-- CHAT INPUT CONTAINER -->
+          <div class="p-3 sm:p-4 bg-white/80 border-t border-pastel-pink/30 shrink-0">
+            <form onsubmit="handleChatSubmit(event)" class="flex items-center gap-2 max-w-4xl mx-auto">
+              <div class="relative flex-1">
+                <input type="text" id="chat-input" placeholder="Ask Shanaya anything (e.g. roast my outfit, code help, advice)..." class="w-full pl-4 pr-10 py-3.5 rounded-full bg-pastel-bgPink/60 border border-pastel-pink/50 focus:outline-none focus:ring-2 focus:ring-pastel-pink text-sm text-gray-800 placeholder-gray-400 shadow-inner">
+                <span class="absolute right-3.5 top-3.5 text-base text-pastel-accent">✨</span>
+              </div>
+              <button type="submit" id="btn-send" class="px-6 py-3.5 rounded-full bg-gradient-to-r from-pastel-pink to-pastel-lavender text-gray-900 font-extrabold text-sm shadow-md hover:shadow-pastel hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shrink-0">
+                <span>Send</span>
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              </button>
+            </form>
+            <p class="text-[10px] text-center text-gray-400 mt-2">Powered by Groq GPT-OSS 120B • Tap Enter to send • 100% Pastel Vibe Guaranteed</p>
+          </div>
+
         </div>
 
-      </div>
-
-      <!-- TYPING INDICATOR (HIDDEN BY DEFAULT) -->
-      <div id="typing-indicator" class="hidden px-6 py-2 flex items-center gap-2 text-xs font-semibold text-pastel-accent animate-pulse">
-        <div class="w-7 h-7 rounded-lg bg-pastel-softPink flex items-center justify-center text-sm">✨</div>
-        <span>Shanaya is thinking of a iconic reply...</span>
-        <div class="flex items-center gap-1 ml-1">
-          <div class="w-1.5 h-1.5 rounded-full bg-pastel-pink animate-bounce" style="animation-delay: 0s;"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-pastel-lavender animate-bounce" style="animation-delay: 0.15s;"></div>
-          <div class="w-1.5 h-1.5 rounded-full bg-pastel-accent animate-bounce" style="animation-delay: 0.3s;"></div>
-        </div>
-      </div>
-
-      <!-- CHAT INPUT CONTAINER -->
-      <div class="p-3 sm:p-4 bg-white/80 border-t border-pastel-pink/30">
-        <form onsubmit="handleChatSubmit(event)" class="flex items-center gap-2 max-w-4xl mx-auto">
-          <div class="relative flex-1">
-            <input type="text" id="chat-input" placeholder="Ask Shanaya anything (e.g. roast my outfit, code help, advice)..." class="w-full pl-4 pr-10 py-3.5 rounded-full bg-pastel-bgPink/60 border border-pastel-pink/50 focus:outline-none focus:ring-2 focus:ring-pastel-pink text-sm text-gray-800 placeholder-gray-400 shadow-inner">
-            <span class="absolute right-3.5 top-3.5 text-base text-pastel-accent">✨</span>
-          </div>
-          <button type="submit" id="btn-send" class="px-6 py-3.5 rounded-full bg-gradient-to-r from-pastel-pink to-pastel-lavender text-gray-900 font-extrabold text-sm shadow-md hover:shadow-pastel hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shrink-0">
-            <span>Send</span>
-            <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-          </button>
-        </form>
-        <p class="text-[10px] text-center text-gray-400 mt-2">Powered by Groq GPT-OSS 120B • Tap Enter to send • 100% Pastel Vibe Guaranteed</p>
       </div>
 
     </main>
@@ -947,10 +988,15 @@
 
 
     /* ========================================================================= */
-    /* 3. GEMINI AI CHAT & SASS METER LOGIC                                     */
+    /* 3. SHANAYA AI CHAT, PERSISTENT SESSIONS & SASS METER LOGIC                */
     /* ========================================================================= */
+    const SESSIONS_STORAGE_KEY = 'shanaya_chat_sessions_v1';
+    const ACTIVE_SESSION_KEY = 'shanaya_active_session_v1';
+
     let chatHistory = [];
     let currentSassLevel = 'sweet'; // 'sweet', 'balanced', 'full'
+    let activeSessionId = null;
+    let isSidebarOpen = true;
 
     // SYSTEM PROMPTS FOR SHANAYA PERSONA & SASS LEVELS
     const systemPrompts = {
@@ -967,23 +1013,33 @@
              Goal: Give helpful answers wrapped in maximum polite sass, dramatic flair, and iconic Gen-Z main-character roast energy.`
     };
 
-    function setSassLevel(level) {
+    function setSassLevel(level, syncSession = true) {
       currentSassLevel = level;
       const sweetBtn = document.getElementById('sass-btn-sweet');
       const balancedBtn = document.getElementById('sass-btn-balanced');
       const fullBtn = document.getElementById('sass-btn-full');
+      if (!sweetBtn || !balancedBtn || !fullBtn) return;
 
       // Reset classes
       [sweetBtn, balancedBtn, fullBtn].forEach(btn => {
-        btn.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all text-gray-600 hover:text-gray-900';
+        btn.className = 'px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all text-gray-600 hover:text-gray-900';
       });
 
       if (level === 'sweet') {
-        sweetBtn.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-pastel-accent shadow-xs';
+        sweetBtn.className = 'px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-pastel-accent shadow-xs';
       } else if (level === 'balanced') {
-        balancedBtn.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-purple-600 shadow-xs';
+        balancedBtn.className = 'px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-purple-600 shadow-xs';
       } else {
-        fullBtn.className = 'px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-rose-600 shadow-xs';
+        fullBtn.className = 'px-2.5 sm:px-3 py-1 rounded-full text-xs font-bold transition-all bg-white text-rose-600 shadow-xs';
+      }
+
+      if (syncSession) {
+        const session = getActiveSession();
+        if (session) {
+          session.vibe = level;
+          saveCurrentSession(session);
+          renderSidebarSessions();
+        }
       }
     }
 
@@ -998,6 +1054,7 @@
         chatView.classList.remove('hidden');
         navChat.className = 'px-4 py-2 rounded-full text-xs font-bold transition-all bg-white/80 shadow-sm text-pastel-accent border border-pastel-pink';
         navHome.className = 'px-4 py-2 rounded-full text-xs font-bold text-gray-600 hover:text-pastel-accent hover:bg-white/60 transition-all';
+        scrollToBottom();
       } else {
         chatView.classList.add('hidden');
         homeView.classList.remove('hidden');
@@ -1006,7 +1063,311 @@
       }
     }
 
+    /* ========================================================================= */
+    /* SIDEBAR & PERSISTENT SESSION MANAGEMENT (localStorage)                   */
+    /* ========================================================================= */
+    function loadAllSessions() {
+      try {
+        const data = localStorage.getItem(SESSIONS_STORAGE_KEY);
+        if (!data) return [];
+        const parsed = JSON.parse(data);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        console.error('Failed to parse sessions from localStorage:', e);
+        return [];
+      }
+    }
+
+    function saveAllSessions(sessions) {
+      try {
+        localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+      } catch (e) {
+        console.error('Failed to save sessions to localStorage:', e);
+      }
+    }
+
+    function getActiveSession() {
+      const sessions = loadAllSessions();
+      return sessions.find(s => s.id === activeSessionId) || null;
+    }
+
+    function saveCurrentSession(session) {
+      if (!session || !session.id) return;
+      const sessions = loadAllSessions();
+      const index = sessions.findIndex(s => s.id === session.id);
+      if (index >= 0) {
+        sessions[index] = session;
+      } else {
+        sessions.unshift(session);
+      }
+      saveAllSessions(sessions);
+    }
+
+    function formatRelativeTime(timestamp) {
+      if (!timestamp) return 'Just now';
+      const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+      if (diffSec < 60) return 'Just now';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHours = Math.floor(diffMin / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+
+    function toggleSidebar(forceState) {
+      isSidebarOpen = typeof forceState === 'boolean' ? forceState : !isSidebarOpen;
+      const sidebar = document.getElementById('chat-sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (!sidebar) return;
+
+      if (isSidebarOpen) {
+        // Mobile open
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        if (backdrop) backdrop.classList.remove('hidden');
+
+        // Desktop open
+        sidebar.classList.remove('sm:w-0', 'sm:border-r-0', 'sm:opacity-0', 'sm:pointer-events-none');
+        sidebar.classList.add('sm:w-64', 'md:w-72', 'sm:opacity-100');
+      } else {
+        // Mobile close
+        sidebar.classList.add('-translate-x-full');
+        sidebar.classList.remove('translate-x-0');
+        if (backdrop) backdrop.classList.add('hidden');
+
+        // Desktop close
+        sidebar.classList.remove('sm:w-64', 'md:w-72', 'sm:opacity-100');
+        sidebar.classList.add('sm:w-0', 'sm:border-r-0', 'sm:opacity-0', 'sm:pointer-events-none');
+      }
+    }
+
+    function createNewSession() {
+      const newSession = {
+        id: 'shanaya_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        title: 'New Bestie Chat ✨',
+        updatedAt: Date.now(),
+        vibe: currentSassLevel || 'sweet',
+        messages: [
+          {
+            role: 'model',
+            text: "Hii bestie! 💖 I'm ready to yap! Ask me anything, pick my brain, or get some main-character advice. Don't forget to play the nu-disco track up top for peak vibes! ✨",
+            time: 'Just now'
+          }
+        ]
+      };
+
+      const sessions = loadAllSessions();
+      sessions.unshift(newSession);
+      saveAllSessions(sessions);
+
+      loadSession(newSession.id);
+
+      if (window.innerWidth < 640) {
+        toggleSidebar(false);
+      }
+      return newSession;
+    }
+
+    function loadSession(sessionId) {
+      const sessions = loadAllSessions();
+      let session = sessions.find(s => s.id === sessionId);
+      if (!session) {
+        if (sessions.length > 0) {
+          session = sessions[0];
+        } else {
+          session = createNewSession();
+          return;
+        }
+      }
+
+      activeSessionId = session.id;
+      try {
+        localStorage.setItem(ACTIVE_SESSION_KEY, activeSessionId);
+      } catch (e) {}
+
+      if (session.vibe && session.vibe !== currentSassLevel) {
+        setSassLevel(session.vibe, false);
+      }
+
+      renderSessionMessages(session);
+      syncChatHistoryFromSession(session);
+      renderSidebarSessions();
+      scrollToBottom();
+
+      if (window.innerWidth < 640) {
+        toggleSidebar(false);
+      }
+    }
+
+    function deleteSession(event, sessionId) {
+      if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+      }
+
+      let sessions = loadAllSessions();
+      sessions = sessions.filter(s => s.id !== sessionId);
+      saveAllSessions(sessions);
+
+      if (activeSessionId === sessionId) {
+        if (sessions.length > 0) {
+          loadSession(sessions[0].id);
+        } else {
+          createNewSession();
+        }
+      } else {
+        renderSidebarSessions();
+      }
+    }
+
+    function renderSidebarSessions() {
+      const listContainer = document.getElementById('sidebar-sessions-list');
+      const countBadge = document.getElementById('session-count-badge');
+      if (!listContainer) return;
+
+      const sessions = loadAllSessions();
+      sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+      if (countBadge) {
+        countBadge.textContent = `${sessions.length} chat${sessions.length === 1 ? '' : 's'}`;
+      }
+
+      if (sessions.length === 0) {
+        listContainer.innerHTML = `
+          <div class="text-center py-8 px-4 text-gray-400 space-y-2">
+            <div class="text-2xl">💅</div>
+            <p class="text-xs font-semibold">No chats saved yet</p>
+            <p class="text-[10px]">Start a new yap session with Shanaya!</p>
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = sessions.map(session => {
+        const isActive = session.id === activeSessionId;
+        const vibeIcon = session.vibe === 'full' ? '💅' : session.vibe === 'balanced' ? '✨' : '🎀';
+        const timeText = formatRelativeTime(session.updatedAt);
+        const titleText = escapeHtml(session.title || 'New Bestie Chat ✨');
+
+        return `
+          <div onclick="loadSession('${session.id}')" class="group relative flex items-center justify-between p-2.5 rounded-2xl transition-all cursor-pointer ${
+            isActive 
+              ? 'bg-gradient-to-r from-pastel-pink/35 to-pastel-lavender/35 border border-pastel-pink/70 shadow-xs text-pastel-accent font-bold' 
+              : 'hover:bg-white/80 text-gray-700 border border-transparent font-medium hover:border-pastel-pink/30'
+          }">
+            <div class="flex items-center gap-2.5 min-w-0 pr-2 flex-1">
+              <span class="text-sm shrink-0" title="Vibe: ${session.vibe || 'sweet'}">${vibeIcon}</span>
+              <div class="truncate flex-1">
+                <p class="text-xs truncate ${isActive ? 'font-bold text-gray-900' : 'text-gray-800'}">${titleText}</p>
+                <p class="text-[10px] text-gray-400 leading-none mt-0.5">${timeText}</p>
+              </div>
+            </div>
+            <button onclick="deleteSession(event, '${session.id}')" title="Delete chat" class="opacity-0 group-hover:opacity-100 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 text-gray-400 transition-all text-xs shrink-0" aria-label="Delete chat">
+              <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderSessionMessages(session) {
+      const chatContainer = document.getElementById('chat-messages');
+      if (!chatContainer) return;
+      chatContainer.innerHTML = '';
+      if (!session || !Array.isArray(session.messages)) return;
+      session.messages.forEach(msg => {
+        renderMessageDOM(msg.role, msg.text, msg.time);
+      });
+    }
+
+    function syncChatHistoryFromSession(session) {
+      chatHistory = [];
+      if (!session || !Array.isArray(session.messages)) return;
+      session.messages.forEach((msg, idx) => {
+        if (idx === 0 && msg.role === 'model' && msg.text.startsWith('Hii bestie!')) {
+          return;
+        }
+        chatHistory.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.text }]
+        });
+      });
+    }
+
+    function renderMessageDOM(sender, text, timeStr) {
+      const chatContainer = document.getElementById('chat-messages');
+      if (!chatContainer) return;
+      const msgDiv = document.createElement('div');
+      const displayTime = timeStr || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      if (sender === 'user') {
+        msgDiv.className = 'flex items-start justify-end gap-3 max-w-2xl ml-auto';
+        msgDiv.innerHTML = `
+          <div class="bg-gradient-to-tr from-pastel-pink to-pastel-softPink text-gray-900 rounded-2xl rounded-tr-none p-4 shadow-sm text-sm font-medium border border-pastel-pink/40 space-y-1">
+            <div class="flex items-center justify-between gap-4 border-b border-black/5 pb-1 text-[10px] text-gray-600">
+              <span class="font-bold">You</span>
+              <span>${displayTime}</span>
+            </div>
+            <p class="whitespace-pre-wrap">${escapeHtml(text)}</p>
+          </div>
+          <div class="w-9 h-9 rounded-xl bg-pastel-lavender flex items-center justify-center text-sm shrink-0 font-bold text-white shadow-xs">
+            ME
+          </div>
+        `;
+      } else {
+        const parsedHTML = marked.parse(text);
+        msgDiv.className = 'flex items-start gap-3 max-w-2xl';
+        msgDiv.innerHTML = `
+          <div class="w-9 h-9 rounded-xl bg-pastel-pink flex items-center justify-center text-lg shrink-0 shadow-xs">
+            💅
+          </div>
+          <div class="bg-white/95 rounded-2xl rounded-tl-none p-4 shadow-sm border border-pastel-pink/30 text-sm text-gray-800 space-y-2 chat-markdown">
+            <div class="flex items-center justify-between border-b border-gray-100 pb-1 mb-1">
+              <span class="font-bold text-xs text-pastel-accent">Shanaya</span>
+              <div class="flex items-center gap-2">
+                <button onclick="copyToClipboard(this)" data-text="${encodeURIComponent(text)}" class="text-[10px] text-gray-400 hover:text-pastel-accent transition-colors">Copy 📋</button>
+                <span class="text-[10px] text-gray-400">${displayTime}</span>
+              </div>
+            </div>
+            <div>${parsedHTML}</div>
+          </div>
+        `;
+      }
+
+      chatContainer.appendChild(msgDiv);
+    }
+
+    function appendMessage(sender, text, timeStr) {
+      const displayTime = timeStr || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      renderMessageDOM(sender, text, displayTime);
+      scrollToBottom();
+
+      const currentSession = getActiveSession();
+      if (currentSession) {
+        currentSession.messages.push({
+          role: sender === 'user' ? 'user' : 'model',
+          text: text,
+          time: displayTime
+        });
+
+        // Auto-title on first user message
+        const userMsgs = currentSession.messages.filter(m => m.role === 'user');
+        if (sender === 'user' && userMsgs.length === 1) {
+          const cleanTitle = text.replace(/[\r\n]+/g, ' ').trim();
+          currentSession.title = cleanTitle.length > 30 ? cleanTitle.substring(0, 30) + '...' : cleanTitle;
+        }
+
+        currentSession.updatedAt = Date.now();
+        saveCurrentSession(currentSession);
+        renderSidebarSessions();
+      }
+    }
+
     function sendIcebreaker(promptText) {
+      createNewSession();
       switchView('chat');
       document.getElementById('chat-input').value = promptText;
       handleChatSubmit();
@@ -1020,7 +1381,7 @@
 
       inputEl.value = '';
 
-      // Append User Message to UI
+      // Append User Message to UI & active session
       appendMessage('user', text);
 
       // Add to conversation history
@@ -1056,7 +1417,7 @@
         const data = await response.json();
         const modelReply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Oops bestie, my iced latte spilled! Try asking again? ☕✨";
 
-        // Save reply in context
+        // Save reply in context & active session
         chatHistory.push({ role: 'model', parts: [{ text: modelReply }] });
         appendMessage('model', modelReply);
 
@@ -1070,72 +1431,57 @@
       }
     }
 
-    function appendMessage(sender, text) {
-      const chatContainer = document.getElementById('chat-messages');
-      const msgDiv = document.createElement('div');
-      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-      if (sender === 'user') {
-        msgDiv.className = 'flex items-start justify-end gap-3 max-w-2xl ml-auto';
-        msgDiv.innerHTML = `
-          <div class="bg-gradient-to-tr from-pastel-pink to-pastel-softPink text-gray-900 rounded-2xl rounded-tr-none p-4 shadow-sm text-sm font-medium border border-pastel-pink/40 space-y-1">
-            <div class="flex items-center justify-between gap-4 border-b border-black/5 pb-1 text-[10px] text-gray-600">
-              <span class="font-bold">You</span>
-              <span>${timeStr}</span>
-            </div>
-            <p class="whitespace-pre-wrap">${escapeHtml(text)}</p>
-          </div>
-          <div class="w-9 h-9 rounded-xl bg-pastel-lavender flex items-center justify-center text-sm shrink-0 font-bold text-white shadow-xs">
-            ME
-          </div>
-        `;
-      } else {
-        const parsedHTML = marked.parse(text);
-        msgDiv.className = 'flex items-start gap-3 max-w-2xl';
-        msgDiv.innerHTML = `
-          <div class="w-9 h-9 rounded-xl bg-pastel-pink flex items-center justify-center text-lg shrink-0 shadow-xs">
-            💅
-          </div>
-          <div class="bg-white/95 rounded-2xl rounded-tl-none p-4 shadow-sm border border-pastel-pink/30 text-sm text-gray-800 space-y-2 chat-markdown">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-1 mb-1">
-              <span class="font-bold text-xs text-pastel-accent">Shanaya</span>
-              <div class="flex items-center gap-2">
-                <button onclick="copyToClipboard(this)" data-text="${encodeURIComponent(text)}" class="text-[10px] text-gray-400 hover:text-pastel-accent transition-colors">Copy 📋</button>
-                <span class="text-[10px] text-gray-400">${timeStr}</span>
-              </div>
-            </div>
-            <div>${parsedHTML}</div>
-          </div>
-        `;
-      }
-
-      chatContainer.appendChild(msgDiv);
-      scrollToBottom();
-    }
-
     function scrollToBottom() {
       const container = document.getElementById('chat-messages');
-      container.scrollTop = container.scrollHeight;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
 
     function clearChatHistory() {
       chatHistory = [];
-      const chatContainer = document.getElementById('chat-messages');
-      chatContainer.innerHTML = `
-        <div class="flex items-start gap-3 max-w-2xl">
-          <div class="w-9 h-9 rounded-xl bg-pastel-pink flex items-center justify-center text-lg shrink-0 shadow-xs">
-            💅
-          </div>
-          <div class="bg-white/95 rounded-2xl rounded-tl-none p-4 shadow-sm border border-pastel-pink/30 text-sm text-gray-800 space-y-2">
-            <div class="flex items-center justify-between border-b border-gray-100 pb-1 mb-1">
-              <span class="font-bold text-xs text-pastel-accent">Shanaya</span>
-              <span class="text-[10px] text-gray-400">Fresh Start</span>
-            </div>
-            <p>Clean slate bestie! 🧹✨ What are we talking about now?</p>
-          </div>
-        </div>
-      `;
+      const currentSession = getActiveSession();
+      if (currentSession) {
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        currentSession.title = "Clean Slate ✨";
+        currentSession.updatedAt = Date.now();
+        currentSession.messages = [
+          {
+            role: 'model',
+            text: "Clean slate bestie! 🧹✨ What are we talking about now?",
+            time: timeStr
+          }
+        ];
+        saveCurrentSession(currentSession);
+        renderSidebarSessions();
+        renderSessionMessages(currentSession);
+        scrollToBottom();
+      }
     }
+
+    function initChatStorage() {
+      const sessions = loadAllSessions();
+      const savedActiveId = localStorage.getItem(ACTIVE_SESSION_KEY);
+
+      if (sessions.length === 0) {
+        createNewSession();
+      } else {
+        const targetId = (savedActiveId && sessions.some(s => s.id === savedActiveId))
+          ? savedActiveId
+          : sessions[0].id;
+        loadSession(targetId);
+      }
+
+      if (window.innerWidth < 640) {
+        isSidebarOpen = false;
+        toggleSidebar(false);
+      } else {
+        isSidebarOpen = true;
+        toggleSidebar(true);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', initChatStorage);
 
     function escapeHtml(str) {
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
