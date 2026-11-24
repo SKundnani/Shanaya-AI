@@ -1213,23 +1213,37 @@
     let activeSessionId = null;
     let isSidebarOpen = true;
 
+    // PERFORMANCE AUDIO & SINGING INSTRUCTIONS
+    const AUDIO_TAG_INSTRUCTION = `
+
+IMPORTANT SPOKEN PERFORMANCE RULES:
+Whenever the user asks you to perform a specific spoken or creative task (e.g., sing a song, recite lyrics, tell a joke, recite a poem, deliver a witty one-liner, rhyme, do a rap):
+1. Write your full sassy response normally with your natural conversational intro and outro bestie banter.
+2. BUT wrap ONLY the exact creative content meant to be performed or spoken aloud in [AUDIO]...[/AUDIO] tags.
+3. If the user specifically asks you to SING a song or lyrics, wrap ONLY the lyrics to sing in [SING]...[/SING] tags.
+4. STRICT RULE: NEVER put your intro banter (e.g., "Omg ok listen up:", "Here's one for you bestie:") or outro comments (e.g., "Slay right?!", "Hope you loved it ✨") inside [AUDIO] or [SING] tags. Put ONLY the performance itself inside the tags.
+Example for singing:
+"Omg ok grab your iced espresso, here is my hit single: [SING]Iced latte in my hand, strutting through the mall, pastel dreams and drama, we are having a ball[/SING] Literally Grammy-worthy if you ask me! ✨"
+Example for a joke or poem:
+"Haha ok wait, this one is hilarious: [AUDIO]Why did the iced espresso call for backup? Because it was getting pressed![/AUDIO] Still laughing at that one 💀"`;
+
     // SYSTEM PROMPTS FOR SHANAYA PERSONA & SASS/ROAST LEVELS
     const systemPrompts = {
       sweet: `You are Shanaya, a warm, super-supportive, peach-aesthetic Gen-Z bestie. 
               Tone: Soft, encouraging, friendly, polite, uses cute emojis (🎀, ✨, 🌸, ☕), gentle slang like "bestie", "slay", "sweetie". 
-              Goal: Give genuine, smart, and ultra-kind helpful answers while making the user feel hyped up and comfortable.`,
+              Goal: Give genuine, smart, and ultra-kind helpful answers while making the user feel hyped up and comfortable.` + AUDIO_TAG_INSTRUCTION,
       
       balanced: `You are Shanaya, a witty, trendy, iced-espresso-powered Gen-Z AI bestie. 
                  Tone: Balanced mix of smart, accurate answers with playful banter, cute slang, witty remarks, and sassy energy. 
-                 Goal: Answer questions thoroughly, but add fun main-character energy, playful jokes, and Gen-Z humor.`,
+                 Goal: Answer questions thoroughly, but add fun main-character energy, playful jokes, and Gen-Z humor.` + AUDIO_TAG_INSTRUCTION,
 
       full: `You are Shanaya in FULL SASS MODE ✨. 
              Tone: Iconic, bold, playful roasting, highly sassy, comedic, iconic comeback energy, but NEVER hateful, offensive, or cruel. 
-             Goal: Give helpful answers wrapped in maximum polite sass, dramatic flair, and iconic Gen-Z main-character roast energy.`,
+             Goal: Give helpful answers wrapped in maximum polite sass, dramatic flair, and iconic Gen-Z main-character roast energy.` + AUDIO_TAG_INSTRUCTION,
 
       roast: `You are Shanaya in UNFILTERED ROAST MODE 🔥. 
               Tone: Razor-sharp comedic wit, brutal yet hilarious Gen-Z roast energy, iced espresso snark, pop-culture roasting, calling out cringe, red flags, delulu thinking, terrible sleep schedules, chaotic screen time, questionable texting habits, and main-character syndrome. 
-              Rules: Be savagely funny and comedic gold. Use snappy Gen-Z roast punchlines (e.g., "bestie is fighting for their life", "the delusion is astronomical", "side eye... bombastic side eye", "who gave you phone privileges?", "not the 3am screen time haunting your soul"). NEVER use hate speech, slurs, harassment, or real cruelty. Keep it witty, banter-heavy, and iconic.`
+              Rules: Be savagely funny and comedic gold. Use snappy Gen-Z roast punchlines (e.g., "bestie is fighting for their life", "the delusion is astronomical", "side eye... bombastic side eye", "who gave you phone privileges?", "not the 3am screen time haunting your soul"). NEVER use hate speech, slurs, harassment, or real cruelty. Keep it witty, banter-heavy, and iconic.` + AUDIO_TAG_INSTRUCTION
     };
 
     function setSassLevel(level, syncSession = true) {
@@ -1602,7 +1616,8 @@
           </div>
         `;
       } else {
-        const parsedHTML = marked.parse(text);
+        const cleanDisplayText = text.replace(/\[\/?(AUDIO|SING)\]/gi, '');
+        const parsedHTML = marked.parse(cleanDisplayText);
         const isRoastMode = currentSassLevel === 'roast';
         const roastHarderBtn = isRoastMode
           ? `<button onclick="roastHarder()" class="text-[10px] font-bold text-[#D96B52] hover:text-[#C46A5B] bg-[#FFF5F0] hover:bg-[#FCEAE0] px-2 py-0.5 rounded-full border border-[#D96B52]/30 transition-all flex items-center gap-1 active:scale-95">Roast Harder 🔥</button>`
@@ -1620,9 +1635,9 @@
               <div class="flex items-center gap-2">
                 ${roastHarderBtn}
                 <button onclick="speakMessageText(this)" data-text="${encodeURIComponent(text)}" class="text-[10px] text-[#634F4B] hover:text-[#D97762] transition-colors flex items-center gap-1 bg-white/70 hover:bg-white px-2 py-0.5 rounded-full border border-[#E5D4FF]/60 shadow-2xs active:scale-95" title="Listen to Shanaya speak this reply">
-                  <span>Listen</span> <span>🔊</span>
+                  <span class="listen-btn-label">Listen</span> <span class="listen-btn-icon">🔊</span>
                 </button>
-                <button onclick="copyToClipboard(this)" data-text="${encodeURIComponent(text)}" class="text-[10px] text-[#634F4B] hover:text-[#D97762] transition-colors">Copy 📋</button>
+                <button onclick="copyToClipboard(this)" data-text="${encodeURIComponent(cleanDisplayText)}" class="text-[10px] text-[#634F4B] hover:text-[#D97762] transition-colors">Copy 📋</button>
                 <span class="text-[10px] text-[#634F4B]/70">${displayTime}</span>
               </div>
             </div>
@@ -1667,8 +1682,11 @@
       handleChatSubmit();
     }
 
-    async function handleChatSubmit(event) {
+    let wasVoiceInput = false;
+
+    async function handleChatSubmit(event, isVoice = false) {
       if (event) event.preventDefault();
+      wasVoiceInput = Boolean(isVoice);
       const inputEl = document.getElementById('chat-input');
       const text = inputEl.value.trim();
       if (!text) return;
@@ -1715,8 +1733,8 @@
         chatHistory.push({ role: 'model', parts: [{ text: modelReply }] });
         appendMessage('model', modelReply);
 
-        // Auto-play TTS voice reply if enabled
-        if (isVoiceReplyEnabled) {
+        // Auto-play TTS voice reply ONLY when wasVoiceInput is true AND voice reply is enabled
+        if (wasVoiceInput && isVoiceReplyEnabled) {
           speakShanayaReply(modelReply);
         }
 
@@ -1809,6 +1827,9 @@
     let recognitionTranscript = '';
     let speechQueue = [];
     let availableVoices = [];
+    let activeListenButton = null;
+    let singingTimer = null;
+    let isSingingActive = false;
 
     // Toast Notification System
     function showToast(message, duration = 2500) {
@@ -1829,6 +1850,31 @@
       }, duration);
     }
 
+    // Manual Listen Button (🔊 / ⏹️) State Helpers
+    function setActiveListenButton(btn) {
+      resetListenButtons();
+      if (!btn) return;
+      activeListenButton = btn;
+      const label = btn.querySelector('.listen-btn-label');
+      const icon = btn.querySelector('.listen-btn-icon');
+      if (label) label.textContent = 'Stop';
+      if (icon) icon.textContent = '⏹️';
+      btn.classList.add('bg-[#FFF5F0]', 'text-[#D96B52]', 'border-[#D96B52]/50');
+      btn.title = 'Stop listening';
+    }
+
+    function resetListenButtons() {
+      if (activeListenButton) {
+        const label = activeListenButton.querySelector('.listen-btn-label');
+        const icon = activeListenButton.querySelector('.listen-btn-icon');
+        if (label) label.textContent = 'Listen';
+        if (icon) icon.textContent = '🔊';
+        activeListenButton.classList.remove('bg-[#FFF5F0]', 'text-[#D96B52]', 'border-[#D96B52]/50');
+        activeListenButton.title = 'Listen to Shanaya speak this reply';
+        activeListenButton = null;
+      }
+    }
+
     // Initialize Speech Synthesis Voices
     function loadVoices() {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
@@ -1840,42 +1886,68 @@
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
 
-    // Select natural, lively female voice (English IN / US / UK)
+    // Youthful, Sassy Female Voice Tuning (Samantha, Aria, Jenny, Google UK Female, Karen, Tessa, Neerja, Female)
     function getPreferredVoice() {
       if (!availableVoices.length && ('speechSynthesis' in window)) {
         availableVoices = window.speechSynthesis.getVoices() || [];
       }
       if (!availableVoices.length) return null;
 
-      const femaleKeywords = [
-        'neerja', 'veena', 'priya', 'kalpana', 'heera', 'aditi',
-        'samantha', 'karen', 'victoria', 'serena', 'tessa', 'fiona',
-        'moira', 'zira', 'jenny', 'aria', 'female', 'natural'
+      // Priority list in strict order requested
+      const priorities = [
+        'samantha',
+        'microsoft aria',
+        'aria',
+        'microsoft jenny',
+        'jenny',
+        'google uk english female',
+        'karen',
+        'tessa',
+        'neerja'
       ];
 
-      // 1. Indian English female voice
-      const enInFemale = availableVoices.find(v => 
-        (v.lang === 'en-IN' || v.lang.replace('_', '-') === 'en-IN') &&
-        femaleKeywords.some(k => v.name.toLowerCase().includes(k))
+      for (const prio of priorities) {
+        const found = availableVoices.find(v => v.name.toLowerCase().includes(prio));
+        if (found) return found;
+      }
+
+      // Next: any voice whose name includes "Female"
+      const femaleNamed = availableVoices.find(v => v.name.toLowerCase().includes('female'));
+      if (femaleNamed) return femaleNamed;
+
+      // Next: other female-coded English voices
+      const otherFemales = ['victoria', 'serena', 'fiona', 'zira', 'salli', 'joanna', 'priya', 'veena', 'kalpana', 'aditi'];
+      const altFemale = availableVoices.find(v => 
+        v.lang.startsWith('en') && otherFemales.some(k => v.name.toLowerCase().includes(k))
       );
-      if (enInFemale) return enInFemale;
+      if (altFemale) return altFemale;
 
-      // 2. Indian English voice
-      const enIn = availableVoices.find(v => v.lang === 'en-IN' || v.lang.replace('_', '-') === 'en-IN');
-      if (enIn) return enIn;
-
-      // 3. English female voice
-      const enFemale = availableVoices.find(v => 
-        v.lang.startsWith('en') && 
-        femaleKeywords.some(k => v.name.toLowerCase().includes(k))
-      );
-      if (enFemale) return enFemale;
-
-      // 4. Any English voice
+      // Next: any English voice
       const anyEn = availableVoices.find(v => v.lang.startsWith('en'));
       if (anyEn) return anyEn;
 
       return availableVoices[0] || null;
+    }
+
+    // Extract performance content inside [SING]...[/SING] or [AUDIO]...[/AUDIO]
+    function extractAudioContent(rawText) {
+      if (!rawText) return { type: 'normal', text: '' };
+
+      // 1. Check for [SING]...[/SING]
+      const singMatch = rawText.match(/\[SING\]([\s\S]*?)\[\/SING\]/i);
+      if (singMatch && singMatch[1].trim()) {
+        return { type: 'sing', text: singMatch[1].trim() };
+      }
+
+      // 2. Check for [AUDIO]...[/AUDIO]
+      const audioMatch = rawText.match(/\[AUDIO\]([\s\S]*?)\[\/AUDIO\]/i);
+      if (audioMatch && audioMatch[1].trim()) {
+        return { type: 'audio', text: audioMatch[1].trim() };
+      }
+
+      // 3. Otherwise normal text stripped of stray tags
+      const clean = rawText.replace(/\[\/?(AUDIO|SING)\]/gi, '').trim();
+      return { type: 'normal', text: clean };
     }
 
     // Clean markdown formatting before TTS synthesis
@@ -1883,6 +1955,8 @@
       if (!text || typeof text !== 'string') return '';
       let str = text;
 
+      // Strip [AUDIO], [/AUDIO], [SING], [/SING] tags if any remain
+      str = str.replace(/\[\/?(AUDIO|SING)\]/gi, ' ');
       // Strip code blocks
       str = str.replace(/```[\s\S]*?```/g, ' ');
       // Strip inline code
@@ -1919,41 +1993,281 @@
       return str.trim();
     }
 
-    // Cancel speech synthesis and empty sentence queue
+    // Melodious Singing Accompaniment Web Audio Engine (Dreamy Pop-Ballad Rhodes Chords + Sparkle Chimes)
+    const SingingAccompaniment = (() => {
+      let audioCtx = null;
+      let masterGain = null;
+      let isRunning = false;
+      let chimeTimer = null;
+      let chordInterval = null;
+
+      function getContext() {
+        if (!audioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          audioCtx = new AudioCtx();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        return audioCtx;
+      }
+
+      // Dreamy pop-ballad chord progression (Cmaj7 -> Am9 -> Fmaj7 -> Gsus4)
+      const chordProgressions = [
+        [261.63, 329.63, 392.00, 493.88], // Cmaj7: C4, E4, G4, B4
+        [220.00, 261.63, 329.63, 392.00], // Am7: A3, C4, E4, G4
+        [174.61, 261.63, 329.63, 349.23], // Fmaj7: F3, C4, E4, F4
+        [196.00, 261.63, 293.66, 392.00]  // Gsus4: G3, C4, D4, G4
+      ];
+
+      // Sparkle chime frequencies (Hz)
+      const chimeNotes = [523.25, 659.25, 783.99, 987.77, 1046.50, 1318.51];
+
+      function playChime(ctx, destination) {
+        if (!isRunning) return;
+        const now = ctx.currentTime;
+        const freq = chimeNotes[Math.floor(Math.random() * chimeNotes.length)];
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now);
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.linearRampToValueAtTime(0.035, now + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+
+        osc.connect(gain);
+        gain.connect(destination);
+
+        osc.start(now);
+        osc.stop(now + 0.6);
+      }
+
+      function start() {
+        stop();
+        try {
+          const ctx = getContext();
+          isRunning = true;
+
+          masterGain = ctx.createGain();
+
+          // Warm lowpass filter for velvety electric piano / pad warmth
+          const filter = ctx.createBiquadFilter();
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(850, ctx.currentTime);
+
+          masterGain.connect(filter);
+          filter.connect(ctx.destination);
+
+          // Smooth fade-in
+          masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+          masterGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.5);
+
+          let chordIndex = 0;
+          function triggerChord() {
+            if (!isRunning) return;
+            const now = ctx.currentTime;
+            const notes = chordProgressions[chordIndex % chordProgressions.length];
+            chordIndex++;
+
+            notes.forEach(f => {
+              const osc = ctx.createOscillator();
+              const noteGain = ctx.createGain();
+
+              osc.type = 'triangle'; // warm Rhodes body
+              osc.frequency.setValueAtTime(f, now);
+
+              noteGain.gain.setValueAtTime(0.0001, now);
+              noteGain.gain.linearRampToValueAtTime(0.05, now + 0.3);
+              noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 3.6);
+
+              osc.connect(noteGain);
+              noteGain.connect(masterGain);
+
+              osc.start(now);
+              osc.stop(now + 3.8);
+            });
+          }
+
+          triggerChord();
+          chordInterval = setInterval(() => {
+            if (!isRunning) {
+              clearInterval(chordInterval);
+              return;
+            }
+            triggerChord();
+          }, 3200);
+
+          function scheduleNextChime() {
+            if (!isRunning) return;
+            playChime(ctx, masterGain);
+            const nextTime = 550 + Math.random() * 750;
+            chimeTimer = setTimeout(scheduleNextChime, nextTime);
+          }
+          chimeTimer = setTimeout(scheduleNextChime, 300);
+
+        } catch (e) {
+          console.warn('Could not start singing accompaniment:', e);
+        }
+      }
+
+      function stop() {
+        isRunning = false;
+        if (chordInterval) {
+          clearInterval(chordInterval);
+          chordInterval = null;
+        }
+        if (chimeTimer) {
+          clearTimeout(chimeTimer);
+          chimeTimer = null;
+        }
+        if (masterGain && audioCtx) {
+          try {
+            const now = audioCtx.currentTime;
+            masterGain.gain.cancelScheduledValues(now);
+            masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.5);
+          } catch (e) {}
+        }
+      }
+
+      return { start, stop };
+    })();
+
+    // Cancel speech synthesis, singing accompaniment, and queues
     function cancelSpeech() {
       speechQueue = [];
+      if (singingTimer) {
+        clearTimeout(singingTimer);
+        singingTimer = null;
+      }
+      if (isSingingActive) {
+        isSingingActive = false;
+        SingingAccompaniment.stop();
+        if (duckedMusicVolume !== null) {
+          AudioEngine.setVolume(duckedMusicVolume);
+          duckedMusicVolume = null;
+        }
+      }
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
+      resetListenButtons();
     }
 
-    // Speak Shanaya reply with lively pitch (~1.1), rate (~1.02), and sentence queue
-    function speakShanayaReply(rawText, force = false) {
-      if (!('speechSynthesis' in window)) return;
-      if (!force && !isVoiceReplyEnabled) return;
-
-      const cleaned = cleanMarkdownForSpeech(rawText);
-      if (!cleaned) return;
-
+    // Melodious Singing Mode (for [SING]): Accompaniment, musical cadence (0.88), varying pitch (1.15-1.32) & 220ms pauses
+    function playSingingPerformance(lyrics) {
       cancelSpeech();
+      isSingingActive = true;
+
+      // Duck/mute background Nu-Disco music completely for the singing performance
+      const volSlider = document.getElementById('volume-slider');
+      duckedMusicVolume = volSlider ? parseFloat(volSlider.value) : 0.7;
+      AudioEngine.setVolume(0.0);
+
+      // Start gentle pop-ballad accompaniment
+      SingingAccompaniment.start();
+
+      // Split lyrics by line or comma/semicolon for musical phrasing
+      const lines = lyrics
+        .split(/[\r\n]+|,\s*|;\s*/)
+        .map(l => cleanMarkdownForSpeech(l))
+        .filter(l => l.length > 0);
+
+      if (!lines.length) {
+        finishSinging();
+        return;
+      }
+
+      let lineIndex = 0;
+      // Gentle musical pitch contour across phrases between 1.15 and 1.32
+      const pitchMelody = [1.18, 1.28, 1.22, 1.32, 1.16, 1.26, 1.30, 1.20];
+
+      function singNextLine() {
+        if (!isSingingActive) return;
+        if (lineIndex >= lines.length) {
+          finishSinging();
+          return;
+        }
+
+        const line = lines[lineIndex];
+        const utterance = new SpeechSynthesisUtterance(line);
+        const voice = getPreferredVoice();
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang || 'en-US';
+        }
+
+        utterance.rate = 0.88; // smoother, musical cadence
+        utterance.pitch = pitchMelody[lineIndex % pitchMelody.length]; // varying pitch between 1.15 and 1.32
+
+        utterance.onend = () => {
+          if (!isSingingActive) return;
+          lineIndex++;
+          if (lineIndex < lines.length) {
+            // Brief 220ms musical pause between lines
+            singingTimer = setTimeout(() => {
+              singNextLine();
+            }, 220);
+          } else {
+            finishSinging();
+          }
+        };
+
+        utterance.onerror = (e) => {
+          console.warn('Singing error:', e);
+          finishSinging();
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
+
+      singNextLine();
+    }
+
+    function finishSinging() {
+      if (singingTimer) {
+        clearTimeout(singingTimer);
+        singingTimer = null;
+      }
+      isSingingActive = false;
+      SingingAccompaniment.stop();
+      if (duckedMusicVolume !== null) {
+        AudioEngine.setVolume(duckedMusicVolume);
+        duckedMusicVolume = null;
+      }
+      resetListenButtons();
+    }
+
+    // Normal Spoken Performance (for [AUDIO] or standard speech): pitch = 1.18, rate = 1.08
+    function playSpokenPerformance(text, isTargetedAudio = false) {
+      cancelSpeech();
+
+      const cleaned = cleanMarkdownForSpeech(text);
+      if (!cleaned) {
+        resetListenButtons();
+        return;
+      }
 
       // Split into sentences to prevent Chromium 15-second speech synthesis cut-off
       const sentences = cleaned.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [cleaned];
       speechQueue = sentences.map(s => s.trim()).filter(Boolean);
 
       function speakNextChunk() {
-        if (!speechQueue.length) return;
+        if (!speechQueue.length) {
+          resetListenButtons();
+          return;
+        }
         const sentence = speechQueue.shift();
         const utterance = new SpeechSynthesisUtterance(sentence);
-        utterance.pitch = 1.1;
-        utterance.rate = 1.02;
+        utterance.pitch = 1.18; // young, lively, confident
+        utterance.rate = 1.08;
 
         const voice = getPreferredVoice();
         if (voice) {
           utterance.voice = voice;
-          utterance.lang = voice.lang || 'en-IN';
-        } else {
-          utterance.lang = 'en-IN';
+          utterance.lang = voice.lang || 'en-US';
         }
 
         utterance.onend = () => {
@@ -1963,6 +2277,7 @@
         utterance.onerror = (e) => {
           console.warn('Speech error:', e);
           speechQueue = [];
+          resetListenButtons();
         };
 
         window.speechSynthesis.speak(utterance);
@@ -1971,24 +2286,47 @@
       speakNextChunk();
     }
 
-    // Replay / Listen button on message bubbles
+    // Speak Shanaya reply: routes to Melodious Singing ([SING]), Targeted Speech ([AUDIO]), or full reply
+    function speakShanayaReply(rawText, force = false, sourceButton = null) {
+      if (!('speechSynthesis' in window)) return;
+      if (!force && !isVoiceReplyEnabled) return;
+
+      if (sourceButton) {
+        setActiveListenButton(sourceButton);
+      }
+
+      const { type, text } = extractAudioContent(rawText);
+      if (!text) {
+        resetListenButtons();
+        return;
+      }
+
+      if (type === 'sing') {
+        playSingingPerformance(text);
+      } else {
+        playSpokenPerformance(text, type === 'audio');
+      }
+    }
+
+    // Manual Replay / Listen button on message bubbles (🔊 / ⏹️)
     function speakMessageText(btn) {
       if (!('speechSynthesis' in window)) {
         showToast('Speech synthesis is not supported on this browser ☕');
         return;
       }
 
-      // If already speaking, clicking toggles off
-      if (window.speechSynthesis.speaking) {
+      // If this exact button is currently playing, click stops it
+      if (activeListenButton === btn) {
         cancelSpeech();
-        showToast('Speech paused ☕');
+        showToast('Audio stopped ☕');
         return;
       }
 
       const rawText = decodeURIComponent(btn.getAttribute('data-text') || '');
       if (rawText) {
-        speakShanayaReply(rawText, true);
-        showToast('Playing Shanaya\'s voice 🔊');
+        const { type } = extractAudioContent(rawText);
+        speakShanayaReply(rawText, true, btn);
+        showToast(type === 'sing' ? 'Singing for you bestie 🎶' : 'Playing Shanaya\'s voice 🔊');
       }
     }
 
@@ -2227,8 +2565,8 @@
             // 1. Check Voice Commands first
             const isCommand = handleVoiceCommand(spokenText);
             if (!isCommand) {
-              // 2. Normal message -> auto-send to /api/chat
-              handleChatSubmit();
+              // 2. Normal message -> auto-send to /api/chat with wasVoiceInput = true!
+              handleChatSubmit(null, true);
             }
           }
         };
