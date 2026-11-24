@@ -1903,19 +1903,41 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       }
     }
 
-    // Explicit Male Voice Filter: Reject any voice with these names
-    const MALE_VOICE_NAMES = [
-      'male', 'daniel', 'alex', 'fred', 'rishi', 'aaron',
-      'albert', 'arthur', 'gordon', 'ralph', 'oliver', 'thomas',
-      'david', 'george', 'guy'
+    // Explicit Male & Novelty Voice Filter: Reject all macOS/system male and novelty voices
+    const BLOCKED_VOICE_NAMES = [
+      'aaron', 'albert', 'alex', 'arthur', 'daniel', 'eddy', 'fred',
+      'gordon', 'grandpa', 'junior', 'oliver', 'ralph', 'reed', 'rishi',
+      'rocko', 'thomas', 'male', 'bad news', 'bahh', 'bells', 'boing',
+      'bubbles', 'cellos', 'good news', 'jester', 'organ', 'superstar',
+      'trinoids', 'whisper', 'wobble', 'zarvox'
     ];
 
-    const VOICE_NAME_STORAGE_KEY = 'shanaya_voice_name';
+    // Allowed Female Voices (Samantha, Google UK English Female, Karen, Tessa, Moira, Victoria, etc.)
+    const ALLOWED_FEMALE_VOICE_NAMES = [
+      'samantha', 'google uk english female', 'karen', 'tessa', 'moira',
+      'victoria', 'veena', 'isha', 'siri', 'aria', 'jenny', 'zira',
+      'susan', 'hazel', 'catherine', 'fiona', 'serena', 'kate',
+      'stephanie', 'allison', 'ava', 'nicky', 'zoe', 'flo', 'sandy',
+      'shelley', 'grandma', 'female'
+    ];
 
-    function isMaleVoice(voice) {
+    const VOICE_NAME_STORAGE_KEY = 'shanaya_voice_v2';
+    // Purge old legacy voice key immediately so any accidentally saved male voice is cleared
+    try {
+      localStorage.removeItem('shanaya_voice_name');
+    } catch (e) {}
+
+    function isFemaleVoice(voice) {
       if (!voice || !voice.name) return false;
       const lower = voice.name.toLowerCase();
-      return MALE_VOICE_NAMES.some(keyword => lower.includes(keyword));
+
+      // Explicitly blocks all macOS/system male & novelty voices
+      if (BLOCKED_VOICE_NAMES.some(blocked => lower.includes(blocked))) {
+        return false;
+      }
+
+      // Allows known female voices
+      return ALLOWED_FEMALE_VOICE_NAMES.some(allowed => lower.includes(allowed));
     }
 
     // Strictly Lock ONE Young Female Voice Globally with Cache
@@ -1929,39 +1951,47 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
         return cachedShanayaVoice;
       }
 
-      // 1. Honor user preference saved in localStorage first
+      // Check dropdown selection first
+      const selectEl = document.getElementById('voice-picker-select') || document.getElementById('top-voice-picker-select');
+      const selectedDropdownName = selectEl ? selectEl.value : null;
+      if (selectedDropdownName) {
+        const ddMatch = allVoices.find(v => v.name === selectedDropdownName);
+        if (ddMatch && isFemaleVoice(ddMatch)) {
+          cachedShanayaVoice = ddMatch;
+          return ddMatch;
+        }
+      }
+
+      // 1. Honor user preference saved in localStorage first (if it passes female filter)
       const storedVoiceName = localStorage.getItem(VOICE_NAME_STORAGE_KEY);
       if (storedVoiceName) {
         const storedMatch = allVoices.find(v => v.name === storedVoiceName);
-        if (storedMatch) {
+        if (storedMatch && isFemaleVoice(storedMatch)) {
           cachedShanayaVoice = storedMatch;
           return storedMatch;
         }
       }
 
-      // 2. If cached voice is valid in current voices, return it
-      if (cachedShanayaVoice && allVoices.some(v => v.name === cachedShanayaVoice.name)) {
+      // 2. If cached voice is valid and female in current voices, return it
+      if (cachedShanayaVoice && isFemaleVoice(cachedShanayaVoice) && allVoices.some(v => v.name === cachedShanayaVoice.name)) {
         return cachedShanayaVoice;
       }
 
-      // Strictly filter out any male voice
-      const femaleCandidates = allVoices.filter(v => !isMaleVoice(v));
+      // 3. Strictly filter English female voices
+      let femaleCandidates = allVoices.filter(v => v.lang.startsWith('en') && isFemaleVoice(v));
+      if (!femaleCandidates.length) {
+        femaleCandidates = allVoices.filter(v => isFemaleVoice(v));
+      }
 
-      // Prioritize youthful female voices in strict order:
-      // 1. samantha, 2. google uk english female, 3. google us english, 4. isha, 5. veena, 6. karen, 7. tessa, 8. moira, 9. victoria, 10. aria / jenny / zira
+      // Auto-select in exact priority order:
+      // samantha -> google uk english female -> karen -> tessa -> moira -> victoria -> first remaining female voice
       const priorityList = [
         'samantha',
         'google uk english female',
-        'google us english',
-        'isha',
-        'veena',
         'karen',
         'tessa',
         'moira',
-        'victoria',
-        'aria',
-        'jenny',
-        'zira'
+        'victoria'
       ];
 
       for (const prio of priorityList) {
@@ -1972,56 +2002,84 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
         }
       }
 
-      // Next: any voice whose name explicitly contains "female"
-      const femaleNamed = femaleCandidates.find(v => v.name.toLowerCase().includes('female'));
-      if (femaleNamed) {
-        cachedShanayaVoice = femaleNamed;
-        return femaleNamed;
-      }
-
-      // Next: other female-coded English voices
-      const otherFemales = ['serena', 'fiona', 'salli', 'joanna', 'priya', 'kalpana', 'aditi', 'kavya'];
-      const altFemale = femaleCandidates.find(v => 
-        v.lang.startsWith('en') && otherFemales.some(n => v.name.toLowerCase().includes(n))
-      );
-      if (altFemale) {
-        cachedShanayaVoice = altFemale;
-        return altFemale;
-      }
-
-      // Next: any English voice in femaleCandidates
-      const anyEn = femaleCandidates.find(v => v.lang.startsWith('en'));
-      if (anyEn) {
-        cachedShanayaVoice = anyEn;
-        return anyEn;
-      }
-
-      // Fallback to first non-male candidate
+      // First remaining female voice
       if (femaleCandidates.length > 0) {
         cachedShanayaVoice = femaleCandidates[0];
         return femaleCandidates[0];
+      }
+
+      // Fallback: any voice not in BLOCKED_VOICE_NAMES
+      const unblocked = allVoices.filter(v => {
+        const lower = (v.name || '').toLowerCase();
+        return !BLOCKED_VOICE_NAMES.some(b => lower.includes(b));
+      });
+      if (unblocked.length > 0) {
+        cachedShanayaVoice = unblocked[0];
+        return cachedShanayaVoice;
       }
 
       cachedShanayaVoice = allVoices[0] || null;
       return cachedShanayaVoice;
     }
 
-    // Populate compact voice dropdowns in both Chat Header and Top Music Pill
+    // Populate compact voice dropdowns ONLY with English voices that pass isFemaleVoice(voice)
     function populateVoiceDropdowns() {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
       const allVoices = window.speechSynthesis.getVoices() || [];
       if (!allVoices.length) return;
 
-      const activeVoice = getShanayaVoice();
-      const currentSelectedName = activeVoice ? activeVoice.name : (localStorage.getItem(VOICE_NAME_STORAGE_KEY) || '');
-
-      // Selectable candidates: non-male English voices first
-      let selectableVoices = allVoices.filter(v => v.lang.startsWith('en') && !isMaleVoice(v));
+      // Filter ONLY with English voices that pass isFemaleVoice(voice) (if none match, fall back to all en voices)
+      let selectableVoices = allVoices.filter(v => v.lang.startsWith('en') && isFemaleVoice(v));
       if (!selectableVoices.length) {
-        selectableVoices = allVoices.filter(v => !isMaleVoice(v));
+        selectableVoices = allVoices.filter(v => isFemaleVoice(v));
+      }
+      if (!selectableVoices.length) {
+        selectableVoices = allVoices.filter(v => v.lang.startsWith('en'));
       }
       if (!selectableVoices.length) {
         selectableVoices = allVoices;
+      }
+
+      // Auto-select in exact priority order:
+      // samantha -> google uk english female -> karen -> tessa -> moira -> victoria -> first remaining female voice
+      const priorityList = [
+        'samantha',
+        'google uk english female',
+        'karen',
+        'tessa',
+        'moira',
+        'victoria'
+      ];
+
+      const storedVoiceName = localStorage.getItem(VOICE_NAME_STORAGE_KEY);
+      let chosenVoice = null;
+      if (storedVoiceName) {
+        chosenVoice = selectableVoices.find(v => v.name === storedVoiceName);
+      }
+
+      if (!chosenVoice) {
+        for (const prio of priorityList) {
+          const match = selectableVoices.find(v => v.name.toLowerCase().includes(prio));
+          if (match) {
+            chosenVoice = match;
+            break;
+          }
+        }
+      }
+
+      if (!chosenVoice && selectableVoices.length) {
+        chosenVoice = selectableVoices[0];
+      }
+
+      const activeName = chosenVoice ? chosenVoice.name : '';
+      if (activeName && !storedVoiceName) {
+        try {
+          localStorage.setItem(VOICE_NAME_STORAGE_KEY, activeName);
+        } catch (e) {}
+      }
+
+      if (chosenVoice) {
+        cachedShanayaVoice = chosenVoice;
       }
 
       const dropdownIds = ['voice-picker-select', 'top-voice-picker-select'];
@@ -2029,21 +2087,19 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
         const select = document.getElementById(id);
         if (!select) return;
 
-        const valToSelect = select.value || currentSelectedName;
-
         select.innerHTML = '';
         selectableVoices.forEach(v => {
           const opt = document.createElement('option');
           opt.value = v.name;
           opt.textContent = `${v.name} (${v.lang})`;
-          if (v.name === valToSelect || (!select.value && v.name === currentSelectedName)) {
+          if (v.name === activeName) {
             opt.selected = true;
           }
           select.appendChild(opt);
         });
 
-        if (currentSelectedName) {
-          select.value = currentSelectedName;
+        if (activeName) {
+          select.value = activeName;
         }
       });
     }
@@ -2079,15 +2135,12 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       cancelSpeech();
 
       const text = "Hey bestie, this is Shanaya!";
-      const utterance = new SpeechSynthesisUtterance(text);
+      const utterance = createUtterance(text, { pitch: 1.1, rate: 1.05 });
       const allVoices = window.speechSynthesis.getVoices() || [];
-      const voice = allVoices.find(v => v.name === voiceName) || getShanayaVoice();
+      const voice = allVoices.find(v => v.name === voiceName);
       if (voice) {
         utterance.voice = voice;
-        utterance.lang = voice.lang;
       }
-      utterance.pitch = 1.18;
-      utterance.rate = 1.08;
 
       window.speechSynthesis.speak(utterance);
       showToast(`Voice set to ${voice ? voice.name : voiceName} ✨`);
@@ -2102,22 +2155,39 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       };
     }
 
-    // Helper: ALWAYS sets BOTH utterance.voice AND utterance.lang so the browser never falls back to a male voice
+    // Helper: Looks up the live SpeechSynthesisVoice object from window.speechSynthesis.getVoices()
+    // matching the dropdown's selected voice name, sets utterance.voice = matchedVoice,
+    // and strictly DOES NOT set utterance.lang manually (to avoid macOS forcing fallback to male voice)
     function createUtterance(text, options = {}) {
       const utterance = new SpeechSynthesisUtterance(text);
-      const voice = getShanayaVoice();
-      if (voice) {
-        utterance.voice = voice;
-        utterance.lang = voice.lang; // Locks language strictly to female voice's dialect
-      } else {
-        utterance.lang = 'en-US';
+
+      const allVoices = (typeof window !== 'undefined' && 'speechSynthesis' in window)
+        ? window.speechSynthesis.getVoices()
+        : [];
+
+      const selectEl = document.getElementById('voice-picker-select') || document.getElementById('top-voice-picker-select');
+      const selectedName = (selectEl && selectEl.value)
+        || localStorage.getItem(VOICE_NAME_STORAGE_KEY)
+        || '';
+
+      let matchedVoice = null;
+      if (selectedName && allVoices.length) {
+        matchedVoice = allVoices.find(v => v.name === selectedName);
       }
-      if (options.pitch !== undefined) {
-        utterance.pitch = options.pitch;
+      if (!matchedVoice) {
+        matchedVoice = getShanayaVoice();
       }
-      if (options.rate !== undefined) {
-        utterance.rate = options.rate;
+
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
       }
+      // CRITICAL: DO NOT set utterance.lang manually!
+      // Setting utterance.lang on macOS/Chrome overrides utterance.voice and triggers system fallback to male voice (like Rishi).
+
+      // Pitch & Rate: default ~1.1 pitch and ~1.05 rate for normal speech
+      utterance.pitch = options.pitch !== undefined ? options.pitch : 1.1;
+      utterance.rate = options.rate !== undefined ? options.rate : 1.05;
+
       return utterance;
     }
 
@@ -2464,11 +2534,10 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
         }
 
         const line = lines[lineIndex];
-        // rate: 0.86, pitch: 1.2 + (index % 3) * 0.04
-        const linePitch = 1.2 + (lineIndex % 3) * 0.04;
+        // Singing mode pitch around 1.12, rate = 0.88
         const utterance = createUtterance(line, {
-          rate: 0.86,
-          pitch: linePitch
+          rate: 0.88,
+          pitch: 1.12
         });
 
         utterance.onend = () => {
@@ -2533,8 +2602,8 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
         }
         const sentence = speechQueue.shift();
         const utterance = createUtterance(sentence, {
-          pitch: 1.18, // youthful, lively, confident
-          rate: 1.08
+          pitch: 1.1, // youthful, lively, confident
+          rate: 1.05
         });
 
         utterance.onend = () => {
