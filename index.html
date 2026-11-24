@@ -455,7 +455,13 @@
 
         <!-- Action Controls -->
         <div class="flex items-center gap-2">
-          <button onclick="clearChatHistory()" class="px-3 py-1.5 rounded-xl text-xs font-bold text-[#634F4B] hover:bg-[#FFF5F0] hover:text-[#D96B52] transition-colors border border-transparent hover:border-[#E5D4FF]/50" title="Clear current conversation">
+          <!-- Voice Reply (TTS) Toggle -->
+          <button id="btn-voice-toggle" onclick="toggleVoiceReply()" class="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 bg-white/95 text-[#D97762] border-[#E5D4FF] shadow-xs hover:bg-[#FFF5F0] active:scale-95" title="Toggle Shanaya Voice Reply">
+            <span id="voice-toggle-icon">🔊</span>
+            <span id="voice-toggle-label" class="hidden sm:inline">Voice On</span>
+          </button>
+
+          <button onclick="clearChatHistory()" class="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-[#634F4B] hover:bg-[#FFF5F0] hover:text-[#D96B52] transition-colors border border-transparent hover:border-[#E5D4FF]/50 active:scale-95" title="Clear current conversation">
             <span class="hidden sm:inline">Clear Chat</span> 🧹
           </button>
         </div>
@@ -551,7 +557,11 @@
                 <input type="text" id="chat-input" placeholder="Ask Shanaya anything (e.g. roast my outfit, code help, advice)..." class="w-full pl-4 pr-10 py-3.5 rounded-full bg-white/95 border border-[#E5D4FF]/70 focus:outline-none focus:ring-2 focus:ring-[#C9B6F2] text-sm text-[#2D2220] placeholder-[#634F4B]/60 shadow-inner">
                 <span class="absolute right-3.5 top-3.5 text-base text-[#D97762]">✨</span>
               </div>
-              <button type="submit" id="btn-send" class="px-6 py-3.5 rounded-full bg-gradient-to-r from-[#F7B2A3] via-[#E5A9C9] to-[#C9B6F2] hover:opacity-95 text-white font-extrabold text-sm shadow-peach hover:shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shrink-0">
+              <!-- Voice Input (Speech-to-Text) Microphone Button -->
+              <button type="button" id="btn-mic" onclick="toggleSpeechRecognition()" class="w-12 h-12 rounded-full bg-white/90 hover:bg-[#FFF5F0] text-[#D97762] border border-[#E5D4FF] shadow-xs hover:shadow-peach flex items-center justify-center text-lg transition-all active:scale-95 shrink-0" title="Voice Input (Speech-to-Text)">
+                <span id="mic-icon">🎤</span>
+              </button>
+              <button type="submit" id="btn-send" class="px-4 sm:px-6 py-3.5 rounded-full bg-gradient-to-r from-[#F7B2A3] via-[#E5A9C9] to-[#C9B6F2] hover:opacity-95 text-white font-extrabold text-sm shadow-peach hover:shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2 shrink-0">
                 <span>Send</span>
                 <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
               </button>
@@ -966,6 +976,22 @@
       }
 
       return {
+        isPlaying: function() {
+          return isPlaying;
+        },
+
+        play: function() {
+          if (!isPlaying) {
+            this.togglePlay();
+          }
+        },
+
+        pause: function() {
+          if (isPlaying) {
+            this.togglePlay();
+          }
+        },
+
         togglePlay: function() {
           initAudio();
           if (isPlaying) {
@@ -996,7 +1022,7 @@
         },
 
         setVolume: function(val) {
-          if (masterGain) {
+          if (masterGain && ctx) {
             masterGain.gain.setValueAtTime(parseFloat(val), ctx.currentTime);
           }
         }
@@ -1593,6 +1619,9 @@
               <span class="font-bold text-xs ${isRoastMode ? 'text-[#D96B52]' : 'text-[#D97762]'}">Shanaya ${isRoastMode ? '🔥' : ''}</span>
               <div class="flex items-center gap-2">
                 ${roastHarderBtn}
+                <button onclick="speakMessageText(this)" data-text="${encodeURIComponent(text)}" class="text-[10px] text-[#634F4B] hover:text-[#D97762] transition-colors flex items-center gap-1 bg-white/70 hover:bg-white px-2 py-0.5 rounded-full border border-[#E5D4FF]/60 shadow-2xs active:scale-95" title="Listen to Shanaya speak this reply">
+                  <span>Listen</span> <span>🔊</span>
+                </button>
                 <button onclick="copyToClipboard(this)" data-text="${encodeURIComponent(text)}" class="text-[10px] text-[#634F4B] hover:text-[#D97762] transition-colors">Copy 📋</button>
                 <span class="text-[10px] text-[#634F4B]/70">${displayTime}</span>
               </div>
@@ -1686,6 +1715,11 @@
         chatHistory.push({ role: 'model', parts: [{ text: modelReply }] });
         appendMessage('model', modelReply);
 
+        // Auto-play TTS voice reply if enabled
+        if (isVoiceReplyEnabled) {
+          speakShanayaReply(modelReply);
+        }
+
       } catch (err) {
         console.error('Chat error:', err);
         const displayError = err?.message || 'Error: Request failed';
@@ -1746,8 +1780,6 @@
       }
     }
 
-    window.addEventListener('DOMContentLoaded', initChatStorage);
-
     function escapeHtml(str) {
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
@@ -1765,6 +1797,472 @@
       btn.innerText = 'Copied! ✨';
       setTimeout(() => btn.innerText = oldText, 2000);
     }
+
+    /* ========================================================================= */
+    /* 5. VOICE INPUT (STT), VOICE COMMANDS & VOICE OUTPUT (TTS) ENGINE          */
+    /* ========================================================================= */
+    const VOICE_REPLY_STORAGE_KEY = 'shanaya_voice_reply_enabled';
+    let isVoiceReplyEnabled = true;
+    let recognitionInstance = null;
+    let isListening = false;
+    let duckedMusicVolume = null;
+    let recognitionTranscript = '';
+    let speechQueue = [];
+    let availableVoices = [];
+
+    // Toast Notification System
+    function showToast(message, duration = 2500) {
+      let toast = document.getElementById('voice-toast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'voice-toast';
+        toast.className = 'fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full bg-white/95 text-[#2D2220] border border-[#E5D4FF] shadow-peach text-xs font-bold transition-all duration-300 pointer-events-none opacity-0 translate-y-2 flex items-center gap-2 backdrop-blur-md';
+        document.body.appendChild(toast);
+      }
+      toast.textContent = message;
+      toast.classList.remove('opacity-0', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
+      clearTimeout(toast._timeout);
+      toast._timeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-2');
+      }, duration);
+    }
+
+    // Initialize Speech Synthesis Voices
+    function loadVoices() {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+      availableVoices = window.speechSynthesis.getVoices() || [];
+    }
+
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    // Select natural, lively female voice (English IN / US / UK)
+    function getPreferredVoice() {
+      if (!availableVoices.length && ('speechSynthesis' in window)) {
+        availableVoices = window.speechSynthesis.getVoices() || [];
+      }
+      if (!availableVoices.length) return null;
+
+      const femaleKeywords = [
+        'neerja', 'veena', 'priya', 'kalpana', 'heera', 'aditi',
+        'samantha', 'karen', 'victoria', 'serena', 'tessa', 'fiona',
+        'moira', 'zira', 'jenny', 'aria', 'female', 'natural'
+      ];
+
+      // 1. Indian English female voice
+      const enInFemale = availableVoices.find(v => 
+        (v.lang === 'en-IN' || v.lang.replace('_', '-') === 'en-IN') &&
+        femaleKeywords.some(k => v.name.toLowerCase().includes(k))
+      );
+      if (enInFemale) return enInFemale;
+
+      // 2. Indian English voice
+      const enIn = availableVoices.find(v => v.lang === 'en-IN' || v.lang.replace('_', '-') === 'en-IN');
+      if (enIn) return enIn;
+
+      // 3. English female voice
+      const enFemale = availableVoices.find(v => 
+        v.lang.startsWith('en') && 
+        femaleKeywords.some(k => v.name.toLowerCase().includes(k))
+      );
+      if (enFemale) return enFemale;
+
+      // 4. Any English voice
+      const anyEn = availableVoices.find(v => v.lang.startsWith('en'));
+      if (anyEn) return anyEn;
+
+      return availableVoices[0] || null;
+    }
+
+    // Clean markdown formatting before TTS synthesis
+    function cleanMarkdownForSpeech(text) {
+      if (!text || typeof text !== 'string') return '';
+      let str = text;
+
+      // Strip code blocks
+      str = str.replace(/```[\s\S]*?```/g, ' ');
+      // Strip inline code
+      str = str.replace(/`([^`]+)`/g, '$1');
+      // Strip images
+      str = str.replace(/!\[([^\]]*)\]\([^)]+\)/g, '');
+      // Strip links [text](url) -> text
+      str = str.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+      // Strip headers
+      str = str.replace(/^#{1,6}\s+/gm, '');
+      // Strip blockquotes
+      str = str.replace(/^\s*>\s+/gm, '');
+      // Strip markdown tables
+      str = str.replace(/\|/g, ' ');
+      // Strip horizontal rules
+      str = str.replace(/^[-*_]{3,}\s*$/gm, '');
+      // Strip bullet points & numbered lists
+      str = str.replace(/^\s*[-*+]\s+/gm, '');
+      str = str.replace(/^\s*\d+\.\s+/gm, '');
+      // Strip bold / italic formatting
+      str = str.replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, '$1');
+      // Strip strikethrough
+      str = str.replace(/~~([^~]+)~~/g, '$1');
+      // Strip HTML tags
+      str = str.replace(/<[^>]*>/g, '');
+      // Strip URLs
+      str = str.replace(/https?:\/\/\S+/g, '');
+      // Replace newlines with pauses
+      str = str.replace(/\n+/g, '. ');
+      // Clean multiple punctuation and spaces
+      str = str.replace(/\.{2,}/g, '.');
+      str = str.replace(/\s+/g, ' ');
+
+      return str.trim();
+    }
+
+    // Cancel speech synthesis and empty sentence queue
+    function cancelSpeech() {
+      speechQueue = [];
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    }
+
+    // Speak Shanaya reply with lively pitch (~1.1), rate (~1.02), and sentence queue
+    function speakShanayaReply(rawText, force = false) {
+      if (!('speechSynthesis' in window)) return;
+      if (!force && !isVoiceReplyEnabled) return;
+
+      const cleaned = cleanMarkdownForSpeech(rawText);
+      if (!cleaned) return;
+
+      cancelSpeech();
+
+      // Split into sentences to prevent Chromium 15-second speech synthesis cut-off
+      const sentences = cleaned.match(/[^.!?]+[.!?]+|\s*[^.!?]+$/g) || [cleaned];
+      speechQueue = sentences.map(s => s.trim()).filter(Boolean);
+
+      function speakNextChunk() {
+        if (!speechQueue.length) return;
+        const sentence = speechQueue.shift();
+        const utterance = new SpeechSynthesisUtterance(sentence);
+        utterance.pitch = 1.1;
+        utterance.rate = 1.02;
+
+        const voice = getPreferredVoice();
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang || 'en-IN';
+        } else {
+          utterance.lang = 'en-IN';
+        }
+
+        utterance.onend = () => {
+          speakNextChunk();
+        };
+
+        utterance.onerror = (e) => {
+          console.warn('Speech error:', e);
+          speechQueue = [];
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
+
+      speakNextChunk();
+    }
+
+    // Replay / Listen button on message bubbles
+    function speakMessageText(btn) {
+      if (!('speechSynthesis' in window)) {
+        showToast('Speech synthesis is not supported on this browser ☕');
+        return;
+      }
+
+      // If already speaking, clicking toggles off
+      if (window.speechSynthesis.speaking) {
+        cancelSpeech();
+        showToast('Speech paused ☕');
+        return;
+      }
+
+      const rawText = decodeURIComponent(btn.getAttribute('data-text') || '');
+      if (rawText) {
+        speakShanayaReply(rawText, true);
+        showToast('Playing Shanaya\'s voice 🔊');
+      }
+    }
+
+    // Voice Reply (TTS) Toggle Control
+    function updateVoiceReplyUI() {
+      const btn = document.getElementById('btn-voice-toggle');
+      const icon = document.getElementById('voice-toggle-icon');
+      const label = document.getElementById('voice-toggle-label');
+      if (!btn || !icon) return;
+
+      if (isVoiceReplyEnabled) {
+        btn.className = 'px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 bg-white/95 text-[#D97762] border-[#E5D4FF] shadow-xs hover:bg-[#FFF5F0] active:scale-95';
+        icon.textContent = '🔊';
+        if (label) label.textContent = 'Voice On';
+        btn.title = 'Voice Reply is ON (Click to mute Shanaya)';
+      } else {
+        btn.className = 'px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 bg-white/60 text-[#634F4B]/60 border-transparent hover:border-[#E5D4FF]/40 hover:bg-white/80 active:scale-95';
+        icon.textContent = '🔇';
+        if (label) label.textContent = 'Voice Off';
+        btn.title = 'Voice Reply is OFF (Click to unmute Shanaya)';
+      }
+    }
+
+    function toggleVoiceReply() {
+      isVoiceReplyEnabled = !isVoiceReplyEnabled;
+      try {
+        localStorage.setItem(VOICE_REPLY_STORAGE_KEY, isVoiceReplyEnabled ? 'true' : 'false');
+      } catch (e) {}
+      if (!isVoiceReplyEnabled) {
+        cancelSpeech();
+      }
+      updateVoiceReplyUI();
+      showToast(isVoiceReplyEnabled ? '🔊 Voice Reply turned ON' : '🔇 Voice Reply turned OFF');
+    }
+
+    // Voice Input Microphone UI State
+    function setMicListeningState(listening) {
+      const btnMic = document.getElementById('btn-mic');
+      const micIcon = document.getElementById('mic-icon');
+      const chatInput = document.getElementById('chat-input');
+      if (!btnMic) return;
+
+      if (listening) {
+        btnMic.className = 'w-12 h-12 rounded-full bg-[#FFF5F0] border-2 border-[#D97762] ring-4 ring-[#FAD4C0]/80 shadow-peach flex items-center justify-center text-lg transition-all active:scale-95 shrink-0 animate-pulse text-[#D96B52]';
+        if (micIcon) micIcon.textContent = '🔴';
+        if (chatInput) {
+          chatInput.placeholder = 'Listening to you bestie... (speak now) 🎙️';
+        }
+      } else {
+        btnMic.className = 'w-12 h-12 rounded-full bg-white/90 hover:bg-[#FFF5F0] text-[#D97762] border border-[#E5D4FF] shadow-xs hover:shadow-peach flex items-center justify-center text-lg transition-all active:scale-95 shrink-0';
+        if (micIcon) micIcon.textContent = '🎤';
+        if (chatInput) {
+          chatInput.placeholder = 'Ask Shanaya anything (e.g. roast my outfit, code help, advice)...';
+        }
+      }
+    }
+
+    function cleanupListening() {
+      isListening = false;
+      setMicListeningState(false);
+      if (duckedMusicVolume !== null) {
+        AudioEngine.setVolume(duckedMusicVolume);
+        duckedMusicVolume = null;
+      }
+    }
+
+    // Natural Voice Command Parser & Dispatcher
+    function handleVoiceCommand(rawText) {
+      if (!rawText) return false;
+      let text = rawText.toLowerCase().replace(/[.,!?;:]/g, ' ').replace(/\s+/g, ' ').trim();
+      text = text.replace(/^(hey\s+shanaya|shanaya|please|can\s+you|could\s+you)\s+/i, '').trim();
+
+      // 1. Stop talking / Shut up / Mute
+      if (/^(stop\s+talking|shut\s+up|mute|be\s+quiet|quiet|stop\s+speaking|silence)$/i.test(text)) {
+        cancelSpeech();
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('Muted Shanaya 🤫');
+        return true;
+      }
+
+      // 2. Roast Mode
+      if (/^(switch\s+to\s+roast\s+mode|roast\s+mode|activate\s+roast\s+mode|turn\s+on\s+roast\s+mode|switch\s+to\s+roast)$/i.test(text)) {
+        setSassLevel('roast');
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('🔥 Roast Mode activated!');
+        speakShanayaReply("Roast mode activated! Prepare yourself bestie, no excuses allowed 🔥", true);
+        return true;
+      }
+
+      // 3. Sweet Mode
+      if (/^(switch\s+to\s+sweet\s+mode|sweet\s+mode|activate\s+sweet\s+mode|turn\s+on\s+sweet\s+mode|switch\s+to\s+sweet)$/i.test(text)) {
+        setSassLevel('sweet');
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('🎀 Sweet Mode activated!');
+        speakShanayaReply("Switched to sweet mode bestie 🎀", true);
+        return true;
+      }
+
+      // 4. Full Sass Mode
+      if (/^(switch\s+to\s+full\s+sass|full\s+sass|full\s+sass\s+mode|switch\s+to\s+sass\s+mode|sass\s+mode|switch\s+to\s+sass)$/i.test(text)) {
+        setSassLevel('full');
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('✨ Full Sass activated!');
+        speakShanayaReply("Full sass mode engaged ✨ Let's yap!", true);
+        return true;
+      }
+
+      // 5. Balanced Mode
+      if (/^(switch\s+to\s+balanced\s+mode|balanced\s+mode|activate\s+balanced\s+mode|turn\s+on\s+balanced\s+mode|switch\s+to\s+balanced|balanced)$/i.test(text)) {
+        setSassLevel('balanced');
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('✨ Balanced Mode activated!');
+        speakShanayaReply("Switched to balanced mode ✨", true);
+        return true;
+      }
+
+      // 6. New Chat
+      if (/^(new\s+chat|start\s+new\s+chat|start\s+a\s+new\s+chat|create\s+new\s+chat|open\s+new\s+chat)$/i.test(text)) {
+        createNewSession();
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('✨ Started a fresh new chat');
+        speakShanayaReply("Started a fresh new chat for you ✨", true);
+        return true;
+      }
+
+      // 7. Clear Chat
+      if (/^(clear\s+chat|clear\s+the\s+chat|clear\s+current\s+chat|wipe\s+chat|clean\s+chat)$/i.test(text)) {
+        clearChatHistory();
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('🧹 Chat cleared');
+        speakShanayaReply("Chat cleared! Clean slate bestie 🧹✨", true);
+        return true;
+      }
+
+      // 8. Play Music
+      if (/^(play\s+music|start\s+music|resume\s+music|play\s+the\s+music|start\s+the\s+music|play\s+song)$/i.test(text)) {
+        AudioEngine.play();
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('🎵 Playing Nu-Disco music');
+        speakShanayaReply("Playing iced espresso nu-disco tunes 🎵", true);
+        return true;
+      }
+
+      // 9. Pause Music
+      if (/^(pause\s+music|stop\s+music|pause\s+the\s+music|stop\s+the\s+music|pause\s+song)$/i.test(text)) {
+        AudioEngine.pause();
+        const inputEl = document.getElementById('chat-input');
+        if (inputEl) inputEl.value = '';
+        showToast('☕ Music paused');
+        speakShanayaReply("Music paused bestie ☕", true);
+        return true;
+      }
+
+      return false;
+    }
+
+    // Toggle Voice Input (Speech Recognition)
+    function toggleSpeechRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        showToast('Voice input works best in Chrome/Edge/Safari 🎙️');
+        return;
+      }
+
+      if (isListening && recognitionInstance) {
+        try {
+          recognitionInstance.stop();
+        } catch (e) {}
+        return;
+      }
+
+      cancelSpeech();
+
+      // Duck background music volume
+      const volSlider = document.getElementById('volume-slider');
+      duckedMusicVolume = volSlider ? parseFloat(volSlider.value) : 0.7;
+      AudioEngine.setVolume(0.12);
+
+      try {
+        recognitionInstance = new SpeechRec();
+        recognitionInstance.lang = 'en-IN';
+        recognitionInstance.interimResults = true;
+        recognitionInstance.continuous = false;
+        recognitionInstance.maxAlternatives = 1;
+        recognitionTranscript = '';
+
+        recognitionInstance.onstart = () => {
+          isListening = true;
+          setMicListeningState(true);
+        };
+
+        recognitionInstance.onresult = (event) => {
+          let interim = '';
+          let final = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            const trans = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              final += trans;
+            } else {
+              interim += trans;
+            }
+          }
+          recognitionTranscript = (final || interim).trim();
+          const chatInput = document.getElementById('chat-input');
+          if (chatInput && (final || interim)) {
+            chatInput.value = (final || interim).trim();
+          }
+        };
+
+        recognitionInstance.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error);
+          if (event.error === 'not-allowed') {
+            showToast('Microphone access denied. Please allow mic permissions 🎤');
+          } else if (event.error !== 'no-speech') {
+            showToast(`Voice error: ${event.error}`);
+          }
+          cleanupListening();
+        };
+
+        recognitionInstance.onend = () => {
+          cleanupListening();
+
+          const chatInput = document.getElementById('chat-input');
+          const spokenText = (recognitionTranscript || chatInput?.value || '').trim();
+          recognitionTranscript = '';
+
+          if (spokenText) {
+            // 1. Check Voice Commands first
+            const isCommand = handleVoiceCommand(spokenText);
+            if (!isCommand) {
+              // 2. Normal message -> auto-send to /api/chat
+              handleChatSubmit();
+            }
+          }
+        };
+
+        recognitionInstance.start();
+      } catch (err) {
+        console.error('Failed to start speech recognition:', err);
+        cleanupListening();
+        showToast('Could not start microphone 🎙️');
+      }
+    }
+
+    function initVoiceControls() {
+      // 1. Restore Voice Reply setting
+      const storedVoiceReply = localStorage.getItem(VOICE_REPLY_STORAGE_KEY);
+      isVoiceReplyEnabled = storedVoiceReply !== null ? storedVoiceReply === 'true' : true;
+      updateVoiceReplyUI();
+
+      // 2. Check Speech Recognition support for Mic button
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const btnMic = document.getElementById('btn-mic');
+      if (!SpeechRec && btnMic) {
+        btnMic.classList.add('opacity-50', 'cursor-not-allowed');
+        btnMic.title = 'Voice input works best in Chrome/Edge/Safari';
+        btnMic.onclick = () => {
+          showToast('Voice input works best in Chrome/Edge/Safari 🎙️');
+        };
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initChatStorage();
+      initVoiceControls();
+    });
   </script>
 </body>
 </html>
