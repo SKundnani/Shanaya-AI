@@ -1,11 +1,6 @@
-const MODELS = [
-    'gemini-3.8-flash',
-    'gemini-3.8-flash-lite',
-    'gemini-2.5-flash-lite',
-    'gemini-2.0-flash'
-];
-
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const RETRY_DELAYS = [1000, 2000];
+const MAX_ATTEMPTS = 3;
 
 module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
@@ -34,16 +29,15 @@ module.exports = async function handler(req, res) {
     let lastStatus = 500;
     let lastError = { error: 'Failed to reach Gemini API' };
 
-    for (let i = 0; i < MODELS.length; i++) {
-        const model = MODELS[i];
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         try {
             const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(parsedBody),
-                    signal: AbortSignal.timeout(12000),
+                    signal: AbortSignal.timeout(15000),
                 }
             );
 
@@ -58,21 +52,22 @@ module.exports = async function handler(req, res) {
             lastStatus = response.status;
             lastError = data;
 
-            // If 503 (overloaded), 429 (rate limit), or 404 (unavailable), wait 600ms and try next model
-            if ([404, 429, 503].includes(response.status)) {
-                if (i < MODELS.length - 1) {
-                    await sleep(600);
+            // Retry specifically on 503 (high demand) or 429 (rate limit)
+            if (response.status === 503 || response.status === 429) {
+                if (attempt < MAX_ATTEMPTS - 1) {
+                    await sleep(RETRY_DELAYS[attempt]);
+                    continue;
                 }
-                continue;
+            } else {
+                // For other non-retryable errors (e.g. 400, 401, 403), return immediately
+                return res.status(response.status).json(data);
             }
-
-            // For other client errors (like 400 Bad Request), return immediately
-            return res.status(response.status).json(data);
         } catch (error) {
             lastStatus = error.name === 'TimeoutError' ? 504 : 500;
             lastError = { error: error.message || 'Request failed' };
-            if (i < MODELS.length - 1) {
-                await sleep(600);
+            if (attempt < MAX_ATTEMPTS - 1) {
+                await sleep(RETRY_DELAYS[attempt]);
+                continue;
             }
         }
     }
