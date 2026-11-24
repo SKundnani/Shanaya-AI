@@ -50,7 +50,7 @@ module.exports = async function handler(req, res) {
         messages.push(...parsedBody.messages);
     }
 
-    try {
+    const callGroq = async (model) => {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
+                model,
                 messages,
                 temperature: 0.8,
                 max_tokens: 1024
@@ -70,11 +70,22 @@ module.exports = async function handler(req, res) {
             error: { message: `Non-JSON response from Groq (${response.status} ${response.statusText})` }
         }));
 
-        if (!response.ok) {
-            return res.status(response.status).json(data);
+        return { response, data };
+    };
+
+    try {
+        let result = await callGroq('openai/gpt-oss-120b');
+
+        // Fallback to openai/gpt-oss-20b if 429 or 503
+        if (result.response.status === 429 || result.response.status === 503) {
+            result = await callGroq('openai/gpt-oss-20b');
         }
 
-        const replyText = data?.choices?.[0]?.message?.content || '';
+        if (!result.response.ok) {
+            return res.status(result.response.status).json(result.data);
+        }
+
+        const replyText = result.data?.choices?.[0]?.message?.content || '';
         return res.status(200).json({
             candidates: [
                 {
