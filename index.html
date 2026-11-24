@@ -190,6 +190,14 @@
         <svg class="w-4 h-4 text-[#634F4B]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M12 6l-4 4H4v4h4l4 4V6z"/></svg>
         <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="0.7" oninput="AudioEngine.setVolume(this.value)" class="w-16 h-1.5 accent-[#E5A9C9] cursor-pointer">
       </div>
+
+      <!-- Compact Voice Picker Dropdown in Top Pill (hidden on small mobile, visible on md+) -->
+      <div class="hidden md:flex items-center gap-1 border-l border-[#E5D4FF]/60 pl-2">
+        <span class="text-xs" title="Shanaya Voice">🗣️</span>
+        <select id="top-voice-picker-select" onchange="handleVoicePickerChange(this.value)" class="bg-transparent text-[11px] font-bold text-[#2D2220] focus:outline-none cursor-pointer max-w-[110px] truncate" title="Choose Shanaya Voice">
+          <option value="">Loading voices...</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -455,6 +463,14 @@
 
         <!-- Action Controls -->
         <div class="flex items-center gap-2">
+          <!-- Voice Picker Dropdown in Chat Header -->
+          <div class="flex items-center gap-1 bg-white/95 border border-[#E5D4FF] rounded-xl px-2 sm:px-2.5 py-1.5 shadow-xs hover:border-[#D97762]/50 transition-all">
+            <span class="text-xs" title="Shanaya Voice">🗣️</span>
+            <select id="voice-picker-select" onchange="handleVoicePickerChange(this.value)" class="bg-transparent text-xs font-bold text-[#2D2220] focus:outline-none cursor-pointer max-w-[100px] sm:max-w-[140px] truncate" title="Shanaya Voice Selection">
+              <option value="">Loading voices...</option>
+            </select>
+          </div>
+
           <!-- Voice Reply (TTS) Toggle -->
           <button id="btn-voice-toggle" onclick="toggleVoiceReply()" class="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 bg-white/95 text-[#D97762] border-[#E5D4FF] shadow-xs hover:bg-[#FFF5F0] active:scale-95" title="Toggle Shanaya Voice Reply">
             <span id="voice-toggle-icon">🔊</span>
@@ -1894,6 +1910,8 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       'david', 'george', 'guy'
     ];
 
+    const VOICE_NAME_STORAGE_KEY = 'shanaya_voice_name';
+
     function isMaleVoice(voice) {
       if (!voice || !voice.name) return false;
       const lower = voice.name.toLowerCase();
@@ -1911,23 +1929,39 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
         return cachedShanayaVoice;
       }
 
+      // 1. Honor user preference saved in localStorage first
+      const storedVoiceName = localStorage.getItem(VOICE_NAME_STORAGE_KEY);
+      if (storedVoiceName) {
+        const storedMatch = allVoices.find(v => v.name === storedVoiceName);
+        if (storedMatch) {
+          cachedShanayaVoice = storedMatch;
+          return storedMatch;
+        }
+      }
+
+      // 2. If cached voice is valid in current voices, return it
+      if (cachedShanayaVoice && allVoices.some(v => v.name === cachedShanayaVoice.name)) {
+        return cachedShanayaVoice;
+      }
+
       // Strictly filter out any male voice
       const femaleCandidates = allVoices.filter(v => !isMaleVoice(v));
 
       // Prioritize youthful female voices in strict order:
-      // Samantha, Google UK English Female, Karen, Tessa, Moira, Victoria, Microsoft Aria, Microsoft Jenny, Veena
+      // 1. samantha, 2. google uk english female, 3. google us english, 4. isha, 5. veena, 6. karen, 7. tessa, 8. moira, 9. victoria, 10. aria / jenny / zira
       const priorityList = [
         'samantha',
         'google uk english female',
+        'google us english',
+        'isha',
+        'veena',
         'karen',
         'tessa',
         'moira',
         'victoria',
-        'microsoft aria',
         'aria',
-        'microsoft jenny',
         'jenny',
-        'veena'
+        'zira'
       ];
 
       for (const prio of priorityList) {
@@ -1946,7 +1980,7 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       }
 
       // Next: other female-coded English voices
-      const otherFemales = ['serena', 'fiona', 'zira', 'salli', 'joanna', 'priya', 'kalpana', 'aditi', 'kavya'];
+      const otherFemales = ['serena', 'fiona', 'salli', 'joanna', 'priya', 'kalpana', 'aditi', 'kavya'];
       const altFemale = femaleCandidates.find(v => 
         v.lang.startsWith('en') && otherFemales.some(n => v.name.toLowerCase().includes(n))
       );
@@ -1972,11 +2006,99 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       return cachedShanayaVoice;
     }
 
-    // Invalidate cached voice when system voices change
+    // Populate compact voice dropdowns in both Chat Header and Top Music Pill
+    function populateVoiceDropdowns() {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+      const allVoices = window.speechSynthesis.getVoices() || [];
+      if (!allVoices.length) return;
+
+      const activeVoice = getShanayaVoice();
+      const currentSelectedName = activeVoice ? activeVoice.name : (localStorage.getItem(VOICE_NAME_STORAGE_KEY) || '');
+
+      // Selectable candidates: non-male English voices first
+      let selectableVoices = allVoices.filter(v => v.lang.startsWith('en') && !isMaleVoice(v));
+      if (!selectableVoices.length) {
+        selectableVoices = allVoices.filter(v => !isMaleVoice(v));
+      }
+      if (!selectableVoices.length) {
+        selectableVoices = allVoices;
+      }
+
+      const dropdownIds = ['voice-picker-select', 'top-voice-picker-select'];
+      dropdownIds.forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+
+        const valToSelect = select.value || currentSelectedName;
+
+        select.innerHTML = '';
+        selectableVoices.forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.name;
+          opt.textContent = `${v.name} (${v.lang})`;
+          if (v.name === valToSelect || (!select.value && v.name === currentSelectedName)) {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+
+        if (currentSelectedName) {
+          select.value = currentSelectedName;
+        }
+      });
+    }
+
+    // Handle user manual voice change from dropdown
+    function handleVoicePickerChange(voiceName) {
+      if (!voiceName) return;
+      try {
+        localStorage.setItem(VOICE_NAME_STORAGE_KEY, voiceName);
+      } catch (e) {}
+
+      const allVoices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      const match = allVoices.find(v => v.name === voiceName);
+      if (match) {
+        cachedShanayaVoice = match;
+      }
+
+      // Keep both dropdowns in sync
+      const dropdownIds = ['voice-picker-select', 'top-voice-picker-select'];
+      dropdownIds.forEach(id => {
+        const select = document.getElementById(id);
+        if (select && select.value !== voiceName) {
+          select.value = voiceName;
+        }
+      });
+
+      // Immediately speak "Hey bestie, this is Shanaya!" using the exact chosen voice as an audio preview
+      previewVoice(voiceName);
+    }
+
+    function previewVoice(voiceName) {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+      cancelSpeech();
+
+      const text = "Hey bestie, this is Shanaya!";
+      const utterance = new SpeechSynthesisUtterance(text);
+      const allVoices = window.speechSynthesis.getVoices() || [];
+      const voice = allVoices.find(v => v.name === voiceName) || getShanayaVoice();
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang;
+      }
+      utterance.pitch = 1.18;
+      utterance.rate = 1.08;
+
+      window.speechSynthesis.speak(utterance);
+      showToast(`Voice set to ${voice ? voice.name : voiceName} ✨`);
+    }
+
+    // Invalidate cached voice and re-populate dropdowns when system voices change
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.onvoiceschanged = () => {
         cachedShanayaVoice = null;
         getShanayaVoice();
+        populateVoiceDropdowns();
       };
     }
 
@@ -2734,7 +2856,12 @@ IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
       isVoiceReplyEnabled = storedVoiceReply !== null ? storedVoiceReply === 'true' : true;
       updateVoiceReplyUI();
 
-      // 2. Check Speech Recognition support for Mic button
+      // 2. Populate Voice Picker dropdowns and retry for async voice loading
+      populateVoiceDropdowns();
+      setTimeout(populateVoiceDropdowns, 500);
+      setTimeout(populateVoiceDropdowns, 1500);
+
+      // 3. Check Speech Recognition support for Mic button
       const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
       const btnMic = document.getElementById('btn-mic');
       if (!SpeechRec && btnMic) {
