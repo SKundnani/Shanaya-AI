@@ -1,9 +1,32 @@
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const RETRY_DELAYS = [1000, 2000];
-const MAX_ATTEMPTS = 3;
-
 module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
+        const isTest = req.query?.test === '1' || (req.url && new URL(req.url, 'http://localhost').searchParams.get('test') === '1');
+        if (isTest) {
+            const apiKey = process.env.GEMINI_API_KEY;
+            if (!apiKey) {
+                return res.status(500).json({ error: 'GEMINI_API_KEY is missing in Vercel Environment Variables' });
+            }
+            try {
+                const testRes = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
+                    {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }] }),
+                        signal: AbortSignal.timeout(7000),
+                    }
+                );
+                const testData = await testRes.json().catch(() => ({
+                    error: { message: `Non-JSON response (${testRes.status} ${testRes.statusText})` }
+                }));
+                return res.status(testRes.status).json(testData);
+            } catch (err) {
+                return res.status(err.name === 'TimeoutError' ? 504 : 500).json({
+                    error: { message: err.message || 'Test request failed' }
+                });
+            }
+        }
+
         return res.status(200).json({
             ok: true,
             hasApiKey: Boolean(process.env.GEMINI_API_KEY)
@@ -26,51 +49,49 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid JSON in request body' });
     }
 
-    let lastStatus = 500;
-    let lastError = { error: 'Failed to reach Gemini API' };
+    const callGemini = async (model) => {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(parsedBody),
+                signal: AbortSignal.timeout(7000),
+            }
+        );
 
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const data = await response.json().catch(() => ({
+            error: { message: `Non-JSON response from Gemini API (${response.status} ${response.statusText})` }
+        }));
+
+        return { response, data };
+    };
+
+    let primaryResult;
+    try {
+        primaryResult = await callGemini('gemini-3.8-flash');
+        if (primaryResult.response.ok) {
+            return res.status(200).json(primaryResult.data);
+        }
+    } catch (err) {
+        primaryResult = {
+            response: { status: err.name === 'TimeoutError' ? 504 : 500, ok: false },
+            data: { error: { message: err.message || 'Request timed out' } }
+        };
+    }
+
+    // If 503 or 429, immediately try gemini-3.8-flash-lite as fast fallback
+    if (primaryResult.response.status === 503 || primaryResult.response.status === 429) {
         try {
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(parsedBody),
-                    signal: AbortSignal.timeout(15000),
-                }
-            );
-
-            const data = await response.json().catch(() => ({
-                error: { message: `Non-JSON response from Gemini API (${response.status} ${response.statusText})` }
-            }));
-
-            if (response.ok) {
-                return res.status(200).json(data);
-            }
-
-            lastStatus = response.status;
-            lastError = data;
-
-            // Retry specifically on 503 (high demand) or 429 (rate limit)
-            if (response.status === 503 || response.status === 429) {
-                if (attempt < MAX_ATTEMPTS - 1) {
-                    await sleep(RETRY_DELAYS[attempt]);
-                    continue;
-                }
-            } else {
-                // For other non-retryable errors (e.g. 400, 401, 403), return immediately
-                return res.status(response.status).json(data);
-            }
-        } catch (error) {
-            lastStatus = error.name === 'TimeoutError' ? 504 : 500;
-            lastError = { error: error.message || 'Request failed' };
-            if (attempt < MAX_ATTEMPTS - 1) {
-                await sleep(RETRY_DELAYS[attempt]);
-                continue;
-            }
+            const fallbackResult = await callGemini('gemini-3.8-flash-lite');
+            return res.status(fallbackResult.response.status).json(fallbackResult.data);
+        } catch (err) {
+            return res.status(err.name === 'TimeoutError' ? 504 : 500).json({
+                error: { message: err.message || 'Fallback request failed' }
+            });
         }
     }
 
-    return res.status(lastStatus).json(lastError);
+    // For other failures (400, 401, 403, etc.), return the exact status and error JSON
+    return res.status(primaryResult.response.status).json(primaryResult.data);
 };

@@ -1039,30 +1039,27 @@
           }
         };
 
-        const sendChatRequest = () => fetch('/api/chat', {
+        const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
-        let response = await sendChatRequest();
-
-        // If 503 or 504, silently retry once after 1.5 seconds
-        if (response.status === 503 || response.status === 504) {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          response = await sendChatRequest();
-        }
-
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('API Error Response:', errorData);
 
+          const detail = errorData?.error?.message || (typeof errorData?.error === 'string' ? errorData.error : '') || response.statusText || 'Request failed';
+
           if (response.status === 503 || response.status === 504 || response.status === 429) {
-            throw new Error("Server thoda busy hai bestie, 5 second baad phir try karo ✨");
+            throw new Error(`Server thoda busy hai bestie (Error ${response.status}: ${detail})`);
           }
 
-          const detail = errorData?.error?.message || (typeof errorData?.error === 'string' ? errorData.error : '') || response.statusText || 'Request failed';
-          throw new Error(`Error ${response.status}: ${detail}`);
+          if (response.status === 400 || response.status === 403) {
+            throw new Error(`API key issue bestie 🌸 (Error ${response.status}: ${detail})`);
+          }
+
+          throw new Error(`Server hiccup bestie 🌸 (Error ${response.status}: ${detail})`);
         }
 
         const data = await response.json();
@@ -1079,7 +1076,7 @@
       } catch (err) {
         console.error('Chat error:', err);
         typingInd.classList.add('hidden');
-        const displayError = err?.message || "Server thoda busy hai bestie, 5 second baad phir try karo ✨";
+        const displayError = err?.message || 'Server hiccup bestie, please try again! 🌸';
         appendMessage('model', displayError);
       }
     }
