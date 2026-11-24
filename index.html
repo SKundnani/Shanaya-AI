@@ -1216,16 +1216,27 @@
     // PERFORMANCE AUDIO & SINGING INSTRUCTIONS
     const AUDIO_TAG_INSTRUCTION = `
 
-IMPORTANT SPOKEN PERFORMANCE RULES:
-Whenever the user asks you to perform a specific spoken or creative task (e.g., sing a song, recite lyrics, tell a joke, recite a poem, deliver a witty one-liner, rhyme, do a rap):
-1. Write your full sassy response normally with your natural conversational intro and outro bestie banter.
-2. BUT wrap ONLY the exact creative content meant to be performed or spoken aloud in [AUDIO]...[/AUDIO] tags.
-3. If the user specifically asks you to SING a song or lyrics, wrap ONLY the lyrics to sing in [SING]...[/SING] tags.
-4. STRICT RULE: NEVER put your intro banter (e.g., "Omg ok listen up:", "Here's one for you bestie:") or outro comments (e.g., "Slay right?!", "Hope you loved it ✨") inside [AUDIO] or [SING] tags. Put ONLY the performance itself inside the tags.
-Example for singing:
-"Omg ok grab your iced espresso, here is my hit single: [SING]Iced latte in my hand, strutting through the mall, pastel dreams and drama, we are having a ball[/SING] Literally Grammy-worthy if you ask me! ✨"
-Example for a joke or poem:
-"Haha ok wait, this one is hilarious: [AUDIO]Why did the iced espresso call for backup? Because it was getting pressed![/AUDIO] Still laughing at that one 💀"`;
+IMPORTANT SPOKEN PERFORMANCE & SINGING RULES:
+1. When asked to SING a song, recite lyrics, or make a musical tune:
+   - You can write your witty conversational intro and outro in your normal text outside the tags.
+   - Inside [SING]...[/SING], write ONLY 4 to 6 short, rhythmic, rhyming pop song lines (each line on a new line).
+   - STRICT RULE: Do NOT include ANY stage directions (like *clears throat*, *adjusts mic*, *starts singing*), parentheses, bullet points, or musical note emojis (🎵, 🎶) inside the [SING] tags. Put ONLY pure rhyming song lyrics inside [SING] tags so Shanaya's singing engine sounds pristine!
+   - Example singing format:
+     Omg ok clear the floor bestie, here is my hit single:
+     [SING]
+     Iced latte in my hand strutting through the mall
+     Pastel dreams and drama we are having a ball
+     Sipping on espresso with my glasses so high
+     Bestie living lavish under bubblegum sky
+     [/SING]
+     Literally Grammy-worthy if you ask me! ✨
+2. When asked to tell a joke, recite a poem, tongue-twister, or one-liner:
+   - Wrap ONLY the exact spoken content inside [AUDIO]...[/AUDIO] tags.
+   - NEVER put your intro banter or outro comments inside [AUDIO] tags.
+   - Example:
+     Haha wait, this one is hilarious:
+     [AUDIO]Why did the iced espresso call for backup? Because it was getting pressed![/AUDIO]
+     Still laughing at that one 💀`;
 
     // SYSTEM PROMPTS FOR SHANAYA PERSONA & SASS/ROAST LEVELS
     const systemPrompts = {
@@ -1830,6 +1841,7 @@ Example for a joke or poem:
     let activeListenButton = null;
     let singingTimer = null;
     let isSingingActive = false;
+    let cachedShanayaVoice = null;
 
     // Toast Notification System
     function showToast(message, duration = 2500) {
@@ -1875,71 +1887,129 @@ Example for a joke or poem:
       }
     }
 
-    // Initialize Speech Synthesis Voices
-    function loadVoices() {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-      availableVoices = window.speechSynthesis.getVoices() || [];
+    // Explicit Male Voice Filter: Reject any voice with these names
+    const MALE_VOICE_NAMES = [
+      'male', 'daniel', 'alex', 'fred', 'rishi', 'aaron',
+      'albert', 'arthur', 'gordon', 'ralph', 'oliver', 'thomas',
+      'david', 'george', 'guy'
+    ];
+
+    function isMaleVoice(voice) {
+      if (!voice || !voice.name) return false;
+      const lower = voice.name.toLowerCase();
+      return MALE_VOICE_NAMES.some(keyword => lower.includes(keyword));
     }
 
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      loadVoices();
-      window.speechSynthesis.onvoiceschanged = loadVoices;
-    }
-
-    // Youthful, Sassy Female Voice Tuning (Samantha, Aria, Jenny, Google UK Female, Karen, Tessa, Neerja, Female)
-    function getPreferredVoice() {
-      if (!availableVoices.length && ('speechSynthesis' in window)) {
-        availableVoices = window.speechSynthesis.getVoices() || [];
+    // Strictly Lock ONE Young Female Voice Globally with Cache
+    function getShanayaVoice() {
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        return null;
       }
-      if (!availableVoices.length) return null;
 
-      // Priority list in strict order requested
-      const priorities = [
+      const allVoices = window.speechSynthesis.getVoices() || [];
+      if (!allVoices.length) {
+        return cachedShanayaVoice;
+      }
+
+      // Strictly filter out any male voice
+      const femaleCandidates = allVoices.filter(v => !isMaleVoice(v));
+
+      // Prioritize youthful female voices in strict order:
+      // Samantha, Google UK English Female, Karen, Tessa, Moira, Victoria, Microsoft Aria, Microsoft Jenny, Veena
+      const priorityList = [
         'samantha',
+        'google uk english female',
+        'karen',
+        'tessa',
+        'moira',
+        'victoria',
         'microsoft aria',
         'aria',
         'microsoft jenny',
         'jenny',
-        'google uk english female',
-        'karen',
-        'tessa',
-        'neerja'
+        'veena'
       ];
 
-      for (const prio of priorities) {
-        const found = availableVoices.find(v => v.name.toLowerCase().includes(prio));
-        if (found) return found;
+      for (const prio of priorityList) {
+        const match = femaleCandidates.find(v => v.name.toLowerCase().includes(prio));
+        if (match) {
+          cachedShanayaVoice = match;
+          return match;
+        }
       }
 
-      // Next: any voice whose name includes "Female"
-      const femaleNamed = availableVoices.find(v => v.name.toLowerCase().includes('female'));
-      if (femaleNamed) return femaleNamed;
+      // Next: any voice whose name explicitly contains "female"
+      const femaleNamed = femaleCandidates.find(v => v.name.toLowerCase().includes('female'));
+      if (femaleNamed) {
+        cachedShanayaVoice = femaleNamed;
+        return femaleNamed;
+      }
 
       // Next: other female-coded English voices
-      const otherFemales = ['victoria', 'serena', 'fiona', 'zira', 'salli', 'joanna', 'priya', 'veena', 'kalpana', 'aditi'];
-      const altFemale = availableVoices.find(v => 
-        v.lang.startsWith('en') && otherFemales.some(k => v.name.toLowerCase().includes(k))
+      const otherFemales = ['serena', 'fiona', 'zira', 'salli', 'joanna', 'priya', 'kalpana', 'aditi', 'kavya'];
+      const altFemale = femaleCandidates.find(v => 
+        v.lang.startsWith('en') && otherFemales.some(n => v.name.toLowerCase().includes(n))
       );
-      if (altFemale) return altFemale;
+      if (altFemale) {
+        cachedShanayaVoice = altFemale;
+        return altFemale;
+      }
 
-      // Next: any English voice
-      const anyEn = availableVoices.find(v => v.lang.startsWith('en'));
-      if (anyEn) return anyEn;
+      // Next: any English voice in femaleCandidates
+      const anyEn = femaleCandidates.find(v => v.lang.startsWith('en'));
+      if (anyEn) {
+        cachedShanayaVoice = anyEn;
+        return anyEn;
+      }
 
-      return availableVoices[0] || null;
+      // Fallback to first non-male candidate
+      if (femaleCandidates.length > 0) {
+        cachedShanayaVoice = femaleCandidates[0];
+        return femaleCandidates[0];
+      }
+
+      cachedShanayaVoice = allVoices[0] || null;
+      return cachedShanayaVoice;
+    }
+
+    // Invalidate cached voice when system voices change
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        cachedShanayaVoice = null;
+        getShanayaVoice();
+      };
+    }
+
+    // Helper: ALWAYS sets BOTH utterance.voice AND utterance.lang so the browser never falls back to a male voice
+    function createUtterance(text, options = {}) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voice = getShanayaVoice();
+      if (voice) {
+        utterance.voice = voice;
+        utterance.lang = voice.lang; // Locks language strictly to female voice's dialect
+      } else {
+        utterance.lang = 'en-US';
+      }
+      if (options.pitch !== undefined) {
+        utterance.pitch = options.pitch;
+      }
+      if (options.rate !== undefined) {
+        utterance.rate = options.rate;
+      }
+      return utterance;
     }
 
     // Extract performance content inside [SING]...[/SING] or [AUDIO]...[/AUDIO]
     function extractAudioContent(rawText) {
       if (!rawText) return { type: 'normal', text: '' };
 
-      // 1. Check for [SING]...[/SING]
+      // 1. Check for [SING]...[/SING] - isolates ONLY song lyrics
       const singMatch = rawText.match(/\[SING\]([\s\S]*?)\[\/SING\]/i);
       if (singMatch && singMatch[1].trim()) {
         return { type: 'sing', text: singMatch[1].trim() };
       }
 
-      // 2. Check for [AUDIO]...[/AUDIO]
+      // 2. Check for [AUDIO]...[/AUDIO] - isolates ONLY spoken performance
       const audioMatch = rawText.match(/\[AUDIO\]([\s\S]*?)\[\/AUDIO\]/i);
       if (audioMatch && audioMatch[1].trim()) {
         return { type: 'audio', text: audioMatch[1].trim() };
@@ -1950,7 +2020,24 @@ Example for a joke or poem:
       return { type: 'normal', text: clean };
     }
 
-    // Clean markdown formatting before TTS synthesis
+    // Clean lyrics strictly for singing mode: removes any stage directions (*...*), emojis, or brackets
+    function cleanLyricsForSinging(text) {
+      if (!text) return [];
+      // Strip stage directions like *clears throat*, (humming), etc.
+      let str = text.replace(/\*[^*]*\*/g, ' ').replace(/\([^)]*\)/g, ' ');
+      // Strip emojis, musical notes (🎵, 🎶), symbols
+      str = str.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[🎵🎶🎤✨🔥💖☕🌸🎀💀]/gu, '');
+      // Strip markdown syntax
+      str = str.replace(/[*_#>`~]/g, '');
+      // Split into distinct lines by newline or semicolon
+      const rawLines = str.split(/[\r\n]+|;\s*/);
+      const lines = rawLines
+        .map(l => l.replace(/\[\/?(SING|AUDIO)\]/gi, '').trim())
+        .filter(l => l.length > 0);
+      return lines;
+    }
+
+    // Clean markdown formatting before standard TTS synthesis
     function cleanMarkdownForSpeech(text) {
       if (!text || typeof text !== 'string') return '';
       let str = text;
@@ -1993,13 +2080,14 @@ Example for a joke or poem:
       return str.trim();
     }
 
-    // Melodious Singing Accompaniment Web Audio Engine (Dreamy Pop-Ballad Rhodes Chords + Sparkle Chimes)
+    // Upgraded Melodious Pop-Ballad Web Audio Engine
+    // Lush Rhodes 7th Chords + Warm Bass + Singing-style Sine/Triangle Lead Melody Tune
     const SingingAccompaniment = (() => {
       let audioCtx = null;
       let masterGain = null;
       let isRunning = false;
-      let chimeTimer = null;
       let chordInterval = null;
+      let scheduledTimeouts = [];
 
       function getContext() {
         if (!audioCtx) {
@@ -2012,37 +2100,136 @@ Example for a joke or poem:
         return audioCtx;
       }
 
-      // Dreamy pop-ballad chord progression (Cmaj7 -> Am9 -> Fmaj7 -> Gsus4)
-      const chordProgressions = [
-        [261.63, 329.63, 392.00, 493.88], // Cmaj7: C4, E4, G4, B4
-        [220.00, 261.63, 329.63, 392.00], // Am7: A3, C4, E4, G4
-        [174.61, 261.63, 329.63, 349.23], // Fmaj7: F3, C4, E4, F4
-        [196.00, 261.63, 293.66, 392.00]  // Gsus4: G3, C4, D4, G4
+      // Pop-ballad harmonic progression in C major / A minor (4 bars, ~2.8s per bar)
+      const songPattern = [
+        {
+          root: 65.41, // C2 bass
+          chords: [130.81, 196.00, 246.94, 329.63], // Cmaj7: C3, G3, B3, E4
+          melody: [
+            { time: 0.0, freq: 329.63, dur: 0.5 },  // E4
+            { time: 0.6, freq: 392.00, dur: 0.5 },  // G4
+            { time: 1.2, freq: 493.88, dur: 0.65 }, // B4
+            { time: 1.9, freq: 440.00, dur: 0.4 },  // A4
+            { time: 2.3, freq: 392.00, dur: 0.4 }   // G4
+          ]
+        },
+        {
+          root: 55.00, // A1 bass
+          chords: [110.00, 164.81, 196.00, 261.63], // Am7: A2, E3, G3, C4
+          melody: [
+            { time: 0.0, freq: 329.63, dur: 0.5 },  // E4
+            { time: 0.6, freq: 523.25, dur: 0.55 }, // C5
+            { time: 1.2, freq: 493.88, dur: 0.65 }, // B4
+            { time: 1.9, freq: 440.00, dur: 0.65 }  // A4
+          ]
+        },
+        {
+          root: 43.65, // F1 bass
+          chords: [87.31, 130.81, 164.81, 220.00], // Fmaj7: F2, C3, E3, A3
+          melody: [
+            { time: 0.0, freq: 349.23, dur: 0.5 },  // F4
+            { time: 0.6, freq: 440.00, dur: 0.5 },  // A4
+            { time: 1.2, freq: 523.25, dur: 0.65 }, // C5
+            { time: 1.9, freq: 587.33, dur: 0.4 },  // D5
+            { time: 2.3, freq: 523.25, dur: 0.4 }   // C5
+          ]
+        },
+        {
+          root: 49.00, // G1 bass
+          chords: [98.00, 146.83, 196.00, 246.94], // Gsus4 / G6: G2, D3, G3, B3
+          melody: [
+            { time: 0.0, freq: 493.88, dur: 0.5 },  // B4
+            { time: 0.6, freq: 440.00, dur: 0.5 },  // A4
+            { time: 1.2, freq: 392.00, dur: 0.65 }, // G4
+            { time: 1.9, freq: 293.66, dur: 0.65 }  // D4
+          ]
+        }
       ];
 
-      // Sparkle chime frequencies (Hz)
-      const chimeNotes = [523.25, 659.25, 783.99, 987.77, 1046.50, 1318.51];
-
-      function playChime(ctx, destination) {
+      function playBar(ctx, barData, barStartTime) {
         if (!isRunning) return;
-        const now = ctx.currentTime;
-        const freq = chimeNotes[Math.floor(Math.random() * chimeNotes.length)];
 
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        // 1. Warm Bass Note on Beat 1 and Beat 3
+        [0.0, 1.4].forEach(offset => {
+          const bassNow = barStartTime + offset;
+          const bassOsc = ctx.createOscillator();
+          const bassGain = ctx.createGain();
+          const bassFilter = ctx.createBiquadFilter();
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, now);
+          bassOsc.type = 'sine';
+          bassOsc.frequency.setValueAtTime(barData.root, bassNow);
 
-        gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(0.035, now + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
+          bassFilter.type = 'lowpass';
+          bassFilter.frequency.setValueAtTime(180, bassNow);
 
-        osc.connect(gain);
-        gain.connect(destination);
+          bassGain.gain.setValueAtTime(0.0001, bassNow);
+          bassGain.gain.linearRampToValueAtTime(0.18, bassNow + 0.06);
+          bassGain.gain.exponentialRampToValueAtTime(0.0001, bassNow + 1.25);
 
-        osc.start(now);
-        osc.stop(now + 0.6);
+          bassOsc.connect(bassFilter);
+          bassFilter.connect(bassGain);
+          bassGain.connect(masterGain);
+
+          bassOsc.start(bassNow);
+          bassOsc.stop(bassNow + 1.3);
+        });
+
+        // 2. Lush Rhodes 7th Chords (Triangle oscillators through 850Hz lowpass filter)
+        barData.chords.forEach(f => {
+          const chordOsc = ctx.createOscillator();
+          const chordGain = ctx.createGain();
+          const chordFilter = ctx.createBiquadFilter();
+
+          chordOsc.type = 'triangle';
+          chordOsc.frequency.setValueAtTime(f, barStartTime);
+
+          chordFilter.type = 'lowpass';
+          chordFilter.frequency.setValueAtTime(850, barStartTime);
+
+          chordGain.gain.setValueAtTime(0.0001, barStartTime);
+          chordGain.gain.linearRampToValueAtTime(0.06, barStartTime + 0.25);
+          chordGain.gain.exponentialRampToValueAtTime(0.0001, barStartTime + 2.75);
+
+          chordOsc.connect(chordFilter);
+          chordFilter.connect(chordGain);
+          chordGain.connect(masterGain);
+
+          chordOsc.start(barStartTime);
+          chordOsc.stop(barStartTime + 2.8);
+        });
+
+        // 3. Soft Singing-Style Lead Melody (Blended Sine + Triangle with Singing Envelope)
+        barData.melody.forEach(m => {
+          const noteNow = barStartTime + m.time;
+
+          const oscSine = ctx.createOscillator();
+          const oscTri = ctx.createOscillator();
+          const noteGain = ctx.createGain();
+          const melodyFilter = ctx.createBiquadFilter();
+
+          oscSine.type = 'sine';
+          oscTri.type = 'triangle';
+          oscSine.frequency.setValueAtTime(m.freq, noteNow);
+          oscTri.frequency.setValueAtTime(m.freq, noteNow);
+
+          melodyFilter.type = 'lowpass';
+          melodyFilter.frequency.setValueAtTime(1200, noteNow);
+
+          // Soft vocal/bell envelope
+          noteGain.gain.setValueAtTime(0.0001, noteNow);
+          noteGain.gain.linearRampToValueAtTime(0.09, noteNow + 0.06);
+          noteGain.gain.exponentialRampToValueAtTime(0.0001, noteNow + m.dur);
+
+          oscSine.connect(melodyFilter);
+          oscTri.connect(melodyFilter);
+          melodyFilter.connect(noteGain);
+          noteGain.connect(masterGain);
+
+          oscSine.start(noteNow);
+          oscTri.start(noteNow);
+          oscSine.stop(noteNow + m.dur + 0.05);
+          oscTri.stop(noteNow + m.dur + 0.05);
+        });
       }
 
       function start() {
@@ -2052,61 +2239,28 @@ Example for a joke or poem:
           isRunning = true;
 
           masterGain = ctx.createGain();
+          masterGain.connect(ctx.destination);
 
-          // Warm lowpass filter for velvety electric piano / pad warmth
-          const filter = ctx.createBiquadFilter();
-          filter.type = 'lowpass';
-          filter.frequency.setValueAtTime(850, ctx.currentTime);
-
-          masterGain.connect(filter);
-          filter.connect(ctx.destination);
-
-          // Smooth fade-in
+          // Clear, audible, well-balanced volume level
           masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-          masterGain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.5);
+          masterGain.gain.linearRampToValueAtTime(0.26, ctx.currentTime + 0.5);
 
-          let chordIndex = 0;
-          function triggerChord() {
+          let barIndex = 0;
+          function scheduleNextBar() {
             if (!isRunning) return;
-            const now = ctx.currentTime;
-            const notes = chordProgressions[chordIndex % chordProgressions.length];
-            chordIndex++;
-
-            notes.forEach(f => {
-              const osc = ctx.createOscillator();
-              const noteGain = ctx.createGain();
-
-              osc.type = 'triangle'; // warm Rhodes body
-              osc.frequency.setValueAtTime(f, now);
-
-              noteGain.gain.setValueAtTime(0.0001, now);
-              noteGain.gain.linearRampToValueAtTime(0.05, now + 0.3);
-              noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 3.6);
-
-              osc.connect(noteGain);
-              noteGain.connect(masterGain);
-
-              osc.start(now);
-              osc.stop(now + 3.8);
-            });
+            const barData = songPattern[barIndex % songPattern.length];
+            barIndex++;
+            playBar(ctx, barData, ctx.currentTime);
           }
 
-          triggerChord();
+          scheduleNextBar();
           chordInterval = setInterval(() => {
             if (!isRunning) {
               clearInterval(chordInterval);
               return;
             }
-            triggerChord();
-          }, 3200);
-
-          function scheduleNextChime() {
-            if (!isRunning) return;
-            playChime(ctx, masterGain);
-            const nextTime = 550 + Math.random() * 750;
-            chimeTimer = setTimeout(scheduleNextChime, nextTime);
-          }
-          chimeTimer = setTimeout(scheduleNextChime, 300);
+            scheduleNextBar();
+          }, 2800);
 
         } catch (e) {
           console.warn('Could not start singing accompaniment:', e);
@@ -2119,15 +2273,14 @@ Example for a joke or poem:
           clearInterval(chordInterval);
           chordInterval = null;
         }
-        if (chimeTimer) {
-          clearTimeout(chimeTimer);
-          chimeTimer = null;
-        }
+        scheduledTimeouts.forEach(t => clearTimeout(t));
+        scheduledTimeouts = [];
+
         if (masterGain && audioCtx) {
           try {
             const now = audioCtx.currentTime;
             masterGain.gain.cancelScheduledValues(now);
-            masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.5);
+            masterGain.gain.linearRampToValueAtTime(0.0001, now + 0.8);
           } catch (e) {}
         }
       }
@@ -2135,7 +2288,7 @@ Example for a joke or poem:
       return { start, stop };
     })();
 
-    // Cancel speech synthesis, singing accompaniment, and queues
+    // Cancel speech synthesis, singing accompaniment, timers, and queues
     function cancelSpeech() {
       speechQueue = [];
       if (singingTimer) {
@@ -2156,7 +2309,7 @@ Example for a joke or poem:
       resetListenButtons();
     }
 
-    // Melodious Singing Mode (for [SING]): Accompaniment, musical cadence (0.88), varying pitch (1.15-1.32) & 220ms pauses
+    // Upgraded Melodious Singing Mode (Speaks ONLY lines inside [SING], 120ms beat pause, 1s hold before fade)
     function playSingingPerformance(lyrics) {
       cancelSpeech();
       isSingingActive = true;
@@ -2166,57 +2319,54 @@ Example for a joke or poem:
       duckedMusicVolume = volSlider ? parseFloat(volSlider.value) : 0.7;
       AudioEngine.setVolume(0.0);
 
-      // Start gentle pop-ballad accompaniment
+      // Start the upgraded pop-ballad accompaniment
       SingingAccompaniment.start();
 
-      // Split lyrics by line or comma/semicolon for musical phrasing
-      const lines = lyrics
-        .split(/[\r\n]+|,\s*|;\s*/)
-        .map(l => cleanMarkdownForSpeech(l))
-        .filter(l => l.length > 0);
-
+      // Clean lyrics inside [SING] - pure rhyming song lines
+      const lines = cleanLyricsForSinging(lyrics);
       if (!lines.length) {
         finishSinging();
         return;
       }
 
       let lineIndex = 0;
-      // Gentle musical pitch contour across phrases between 1.15 and 1.32
-      const pitchMelody = [1.18, 1.28, 1.22, 1.32, 1.16, 1.26, 1.30, 1.20];
 
       function singNextLine() {
         if (!isSingingActive) return;
         if (lineIndex >= lines.length) {
-          finishSinging();
+          // 1-second pause after final line finishes before fading out melody
+          singingTimer = setTimeout(() => {
+            finishSinging();
+          }, 1000);
           return;
         }
 
         const line = lines[lineIndex];
-        const utterance = new SpeechSynthesisUtterance(line);
-        const voice = getPreferredVoice();
-        if (voice) {
-          utterance.voice = voice;
-          utterance.lang = voice.lang || 'en-US';
-        }
-
-        utterance.rate = 0.88; // smoother, musical cadence
-        utterance.pitch = pitchMelody[lineIndex % pitchMelody.length]; // varying pitch between 1.15 and 1.32
+        // rate: 0.86, pitch: 1.2 + (index % 3) * 0.04
+        const linePitch = 1.2 + (lineIndex % 3) * 0.04;
+        const utterance = createUtterance(line, {
+          rate: 0.86,
+          pitch: linePitch
+        });
 
         utterance.onend = () => {
           if (!isSingingActive) return;
           lineIndex++;
           if (lineIndex < lines.length) {
-            // Brief 220ms musical pause between lines
+            // Tight, natural 120ms beat pause between lines
             singingTimer = setTimeout(() => {
               singNextLine();
-            }, 220);
+            }, 120);
           } else {
-            finishSinging();
+            // Final line ended - hold melody for 1 second before fading out
+            singingTimer = setTimeout(() => {
+              finishSinging();
+            }, 1000);
           }
         };
 
         utterance.onerror = (e) => {
-          console.warn('Singing error:', e);
+          console.warn('Singing utterance error:', e);
           finishSinging();
         };
 
@@ -2260,15 +2410,10 @@ Example for a joke or poem:
           return;
         }
         const sentence = speechQueue.shift();
-        const utterance = new SpeechSynthesisUtterance(sentence);
-        utterance.pitch = 1.18; // young, lively, confident
-        utterance.rate = 1.08;
-
-        const voice = getPreferredVoice();
-        if (voice) {
-          utterance.voice = voice;
-          utterance.lang = voice.lang || 'en-US';
-        }
+        const utterance = createUtterance(sentence, {
+          pitch: 1.18, // youthful, lively, confident
+          rate: 1.08
+        });
 
         utterance.onend = () => {
           speakNextChunk();
@@ -2291,6 +2436,8 @@ Example for a joke or poem:
       if (!('speechSynthesis' in window)) return;
       if (!force && !isVoiceReplyEnabled) return;
 
+      cancelSpeech();
+
       if (sourceButton) {
         setActiveListenButton(sourceButton);
       }
@@ -2302,8 +2449,10 @@ Example for a joke or poem:
       }
 
       if (type === 'sing') {
+        // When reply contains [SING], pass ONLY the text inside [SING] to the singing player (No spoken intro lines)
         playSingingPerformance(text);
       } else {
+        // When reply contains [AUDIO], pass ONLY the text inside [AUDIO]
         playSpokenPerformance(text, type === 'audio');
       }
     }
