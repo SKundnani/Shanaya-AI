@@ -1048,11 +1048,13 @@
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('API Error Response:', errorData);
-          throw new Error(`API Error: ${response.status}`);
+          const detail = errorData?.error?.message || (typeof errorData?.error === 'string' ? errorData.error : '') || response.statusText || 'Request failed';
+          throw new Error(`Error ${response.status}: ${detail}`);
         }
 
         const data = await response.json();
-        const modelReply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Oops bestie, my iced latte spilled! Try asking again? ☕✨";
+        const modelReply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 
+          (data?.candidates?.[0]?.finishReason ? `Response stopped: ${data.candidates[0].finishReason}` : "Oops bestie, my iced latte spilled! Try asking again? ☕✨");
 
         // Save reply in context
         chatHistory.push({ role: 'model', parts: [{ text: modelReply }] });
@@ -1062,9 +1064,10 @@
         appendMessage('model', modelReply);
 
       } catch (err) {
-        console.error(err);
+        console.error('Chat error:', err);
         typingInd.classList.add('hidden');
-        appendMessage('model', "Bestie, I had a micro Wi-Fi hiccup! 🌸 Make sure your connection is slay and try again!");
+        const displayError = err?.message || 'Error: Failed to communicate with chat server';
+        appendMessage('model', `⚠️ ${displayError}`);
       }
     }
 
