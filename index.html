@@ -1032,10 +1032,6 @@
       scrollToBottom();
 
       try {
-        // Call Gemini REST API (gemini-3-flash-preview)
-        const apiKey = ""; // Canvas runtime automatically supplies key if empty string
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
         const payload = {
           contents: chatHistory,
           systemInstruction: {
@@ -1043,13 +1039,15 @@
           }
         };
 
-        const response = await fetch(apiUrl, {
+        const response = await fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error('API Error Response:', errorData);
           throw new Error(`API Error: ${response.status}`);
         }
 
