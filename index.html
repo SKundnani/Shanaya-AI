@@ -1039,15 +1039,28 @@
           }
         };
 
-        const response = await fetch('/api/chat', {
+        const sendChatRequest = () => fetch('/api/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
 
+        let response = await sendChatRequest();
+
+        // If 503 or 504, silently retry once after 1.5 seconds
+        if (response.status === 503 || response.status === 504) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          response = await sendChatRequest();
+        }
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           console.error('API Error Response:', errorData);
+
+          if (response.status === 503 || response.status === 504 || response.status === 429) {
+            throw new Error("Server thoda busy hai bestie, 5 second baad phir try karo ✨");
+          }
+
           const detail = errorData?.error?.message || (typeof errorData?.error === 'string' ? errorData.error : '') || response.statusText || 'Request failed';
           throw new Error(`Error ${response.status}: ${detail}`);
         }
@@ -1066,8 +1079,8 @@
       } catch (err) {
         console.error('Chat error:', err);
         typingInd.classList.add('hidden');
-        const displayError = err?.message || 'Error: Failed to communicate with chat server';
-        appendMessage('model', `⚠️ ${displayError}`);
+        const displayError = err?.message || "Server thoda busy hai bestie, 5 second baad phir try karo ✨";
+        appendMessage('model', displayError);
       }
     }
 
