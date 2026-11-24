@@ -1,35 +1,9 @@
 module.exports = async function handler(req, res) {
     if (req.method === 'GET') {
-        const isTest = req.query?.test === '1' || (req.url && new URL(req.url, 'http://localhost').searchParams.get('test') === '1');
-        if (isTest) {
-            const apiKey = process.env.GEMINI_API_KEY;
-            if (!apiKey) {
-                return res.status(500).json({ error: 'GEMINI_API_KEY is missing in Vercel Environment Variables' });
-            }
-            try {
-                const testRes = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`,
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: 'hi' }] }] }),
-                        signal: AbortSignal.timeout(7000),
-                    }
-                );
-                const testData = await testRes.json().catch(() => ({
-                    error: { message: `Non-JSON response (${testRes.status} ${testRes.statusText})` }
-                }));
-                return res.status(testRes.status).json(testData);
-            } catch (err) {
-                return res.status(err.name === 'TimeoutError' ? 504 : 500).json({
-                    error: { message: err.message || 'Test request failed' }
-                });
-            }
-        }
-
         return res.status(200).json({
             ok: true,
-            hasApiKey: Boolean(process.env.GEMINI_API_KEY)
+            provider: 'groq',
+            hasApiKey: Boolean(process.env.GROQ_API_KEY)
         });
     }
 
@@ -37,9 +11,9 @@ module.exports = async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-        return res.status(500).json({ error: 'GEMINI_API_KEY is missing in Vercel Environment Variables' });
+        return res.status(500).json({ error: 'Missing GROQ_API_KEY in Vercel Environment Variables' });
     }
 
     let parsedBody;
@@ -49,49 +23,71 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid JSON in request body' });
     }
 
-    const callGemini = async (model) => {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(parsedBody),
-                signal: AbortSignal.timeout(7000),
+    const messages = [];
+
+    // Convert Gemini systemInstruction to OpenAI system message
+    if (parsedBody?.systemInstruction) {
+        const sysText = Array.isArray(parsedBody.systemInstruction.parts)
+            ? parsedBody.systemInstruction.parts.map(p => p.text || '').join('\n').trim()
+            : (typeof parsedBody.systemInstruction === 'string' ? parsedBody.systemInstruction : '');
+        if (sysText) {
+            messages.push({ role: 'system', content: sysText });
+        }
+    }
+
+    // Convert Gemini contents array to OpenAI messages array
+    if (Array.isArray(parsedBody?.contents)) {
+        for (const item of parsedBody.contents) {
+            const role = item.role === 'model' ? 'assistant' : (item.role || 'user');
+            const text = Array.isArray(item.parts)
+                ? item.parts.map(p => p.text || '').join('\n').trim()
+                : (typeof item.content === 'string' ? item.content : '');
+            if (text) {
+                messages.push({ role, content: text });
             }
-        );
+        }
+    } else if (Array.isArray(parsedBody?.messages)) {
+        messages.push(...parsedBody.messages);
+    }
+
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages,
+                temperature: 0.8,
+                max_tokens: 1024
+            }),
+            signal: AbortSignal.timeout(8000)
+        });
 
         const data = await response.json().catch(() => ({
-            error: { message: `Non-JSON response from Gemini API (${response.status} ${response.statusText})` }
+            error: { message: `Non-JSON response from Groq (${response.status} ${response.statusText})` }
         }));
 
-        return { response, data };
-    };
-
-    let primaryResult;
-    try {
-        primaryResult = await callGemini('gemini-3.8-flash');
-        if (primaryResult.response.ok) {
-            return res.status(200).json(primaryResult.data);
+        if (!response.ok) {
+            return res.status(response.status).json(data);
         }
-    } catch (err) {
-        primaryResult = {
-            response: { status: err.name === 'TimeoutError' ? 504 : 500, ok: false },
-            data: { error: { message: err.message || 'Request timed out' } }
-        };
-    }
 
-    // If 503 or 429, immediately try gemini-3.8-flash-lite as fast fallback
-    if (primaryResult.response.status === 503 || primaryResult.response.status === 429) {
-        try {
-            const fallbackResult = await callGemini('gemini-3.8-flash-lite');
-            return res.status(fallbackResult.response.status).json(fallbackResult.data);
-        } catch (err) {
-            return res.status(err.name === 'TimeoutError' ? 504 : 500).json({
-                error: { message: err.message || 'Fallback request failed' }
-            });
-        }
+        const replyText = data?.choices?.[0]?.message?.content || '';
+        return res.status(200).json({
+            candidates: [
+                {
+                    content: {
+                        parts: [{ text: replyText }]
+                    }
+                }
+            ]
+        });
+    } catch (error) {
+        const status = error.name === 'TimeoutError' ? 504 : 500;
+        return res.status(status).json({
+            error: { message: error.message || 'Failed to reach Groq API' }
+        });
     }
-
-    // For other failures (400, 401, 403, etc.), return the exact status and error JSON
-    return res.status(primaryResult.response.status).json(primaryResult.data);
 };

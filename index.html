@@ -316,19 +316,19 @@
           </button>
         </div>
 
-        <!-- Bento 3: Powered by Gemini API -->
+        <!-- Bento 3: Powered by Groq Llama 3.3 -->
         <div class="glass-card rounded-2xl p-6 shadow-card hover:shadow-pastel transition-all flex flex-col justify-between border border-white/80">
           <div>
             <div class="w-10 h-10 rounded-xl bg-pastel-peach/60 flex items-center justify-center text-xl mb-4 border border-pastel-peach">
               ⚡
             </div>
-            <h3 class="font-serif text-xl font-bold text-gray-900 mb-1">Gemini AI Intelligence</h3>
+            <h3 class="font-serif text-xl font-bold text-gray-900 mb-1">Groq Llama 3.3 Intelligence</h3>
             <p class="text-xs text-gray-600 leading-relaxed mb-4">
-              High-speed reasoning, creative storytelling, homework help, code refactoring, & main-character advice.
+              Ultra-fast inference, creative storytelling, homework help, code refactoring, & main-character advice.
             </p>
           </div>
           <div class="text-[11px] font-semibold text-gray-500 bg-white/70 px-3 py-1.5 rounded-lg border border-gray-100 flex items-center justify-between">
-            <span>Model: gemini-3-flash-preview</span>
+            <span>Model: llama-3.3-70b-versatile</span>
             <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
           </div>
         </div>
@@ -470,7 +470,7 @@
             <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
           </button>
         </form>
-        <p class="text-[10px] text-center text-gray-400 mt-2">Powered by Gemini 3 Flash • Tap Enter to send • 100% Pastel Vibe Guaranteed</p>
+        <p class="text-[10px] text-center text-gray-400 mt-2">Powered by Groq Llama 3.3 • Tap Enter to send • 100% Pastel Vibe Guaranteed</p>
       </div>
 
     </main>
@@ -1050,34 +1050,23 @@
           console.error('API Error Response:', errorData);
 
           const detail = errorData?.error?.message || (typeof errorData?.error === 'string' ? errorData.error : '') || response.statusText || 'Request failed';
-
-          if (response.status === 503 || response.status === 504 || response.status === 429) {
-            throw new Error(`Server thoda busy hai bestie (Error ${response.status}: ${detail})`);
-          }
-
-          if (response.status === 400 || response.status === 403) {
-            throw new Error(`API key issue bestie 🌸 (Error ${response.status}: ${detail})`);
-          }
-
-          throw new Error(`Server hiccup bestie 🌸 (Error ${response.status}: ${detail})`);
+          throw new Error(`Error ${response.status}: ${detail}`);
         }
 
         const data = await response.json();
-        const modelReply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 
-          (data?.candidates?.[0]?.finishReason ? `Response stopped: ${data.candidates[0].finishReason}` : "Oops bestie, my iced latte spilled! Try asking again? ☕✨");
+        const modelReply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Oops bestie, my iced latte spilled! Try asking again? ☕✨";
 
         // Save reply in context
         chatHistory.push({ role: 'model', parts: [{ text: modelReply }] });
-
-        // Hide Typing Indicator & Render Reply
-        typingInd.classList.add('hidden');
         appendMessage('model', modelReply);
 
       } catch (err) {
         console.error('Chat error:', err);
-        typingInd.classList.add('hidden');
-        const displayError = err?.message || 'Server hiccup bestie, please try again! 🌸';
+        const displayError = err?.message || 'Error: Request failed';
         appendMessage('model', displayError);
+      } finally {
+        typingInd.classList.add('hidden');
+        scrollToBottom();
       }
     }
 
